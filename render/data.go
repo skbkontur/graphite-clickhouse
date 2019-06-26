@@ -57,7 +57,8 @@ func ReadUvarint(array []byte) (uint64, int, error) {
 }
 
 type Data struct {
-	body    []byte // raw RowBinary from clickhouse
+	//body    []byte // raw RowBinary from clickhouse
+	length  int // readed bytes count
 	Points  *point.Points
 	nameMap map[string]string
 	Aliases map[string][]string
@@ -136,6 +137,8 @@ func DataParse(bodyReader io.Reader, extraPoints *point.Points, isReverse bool) 
 
 	for scanner.Scan() {
 		row := scanner.Bytes()
+
+		d.length += len(row)
 
 		namelen, readBytes, err := ReadUvarint(row)
 		if err != nil {
