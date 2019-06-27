@@ -20,6 +20,23 @@ import (
 	"go.uber.org/zap"
 )
 
+type ErrDataParse struct {
+	err  string
+	data string
+}
+
+func NewErrDataParse(err string, data string) error {
+	return &ErrDataParse{err, data}
+}
+
+func (e *ErrDataParse) Error() string {
+	return fmt.Sprintf("%s: %s", e.err, e.data)
+}
+
+func (e *ErrDataParse) PrependDescription(test string) {
+	e.data = test + e.data
+}
+
 var ErrUvarintRead = errors.New("ReadUvarint: Malformed array")
 var ErrUvarintOverflow = errors.New("ReadUvarint: varint overflows a 64-bit integer")
 var ErrClickHouseResponse = errors.New("Malformed response from clickhouse")
@@ -37,12 +54,17 @@ func HandleError(w http.ResponseWriter, err error) {
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	} else if strings.HasPrefix(err.Error(), "clickhouse response status 500: Code: 170,") {
-		http.Error(w, "Storage configuration error", http.StatusServiceUnavailable)
-	} else if strings.HasPrefix(err.Error(), "clickhouse response status 500: Code:") &&
-		strings.Index(err.Error(), ": Limit for ") != -1 {
-		//logger.Info("limit", zap.Error(err))
-		http.Error(w, "Storage read limit", http.StatusBadRequest)
+		return
+	}
+	_, ok = err.(*ErrDataParse)
+	if ok || strings.HasPrefix(err.Error(), "clickhouse response status 500: Code:") {
+		if strings.Contains(err.Error(), ": Limit for ") {
+			//logger.Info("limit", zap.Error(err))
+			http.Error(w, "Storage read limit", http.StatusForbidden)
+		} else if !ok && strings.HasPrefix(err.Error(), "clickhouse response status 500: Code: 170,") {
+			// clickhouse response status 500: Code: 170, e.displayText() = DB::Exception: Requested cluster 'cluster' not found
+			http.Error(w, "Storage configuration error", http.StatusServiceUnavailable)
+		}
 	} else {
 		//logger.Debug("query", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
