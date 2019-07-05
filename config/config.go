@@ -43,10 +43,11 @@ type Common struct {
 	// MetricPrefix   string    `toml:"metric-prefix"`
 	// MetricInterval *Duration `toml:"metric-interval"`
 	// MetricEndpoint string    `toml:"metric-endpoint"`
-	MaxCPU                 int              `toml:"max-cpu" json:"max-cpu"`
-	MaxMetricsInFindAnswer int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"` //zero means infinite
-	TargetBlacklist        []string         `toml:"target-blacklist" json:"target-blacklist"`
-	Blacklist              []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
+	MaxCPU                   int              `toml:"max-cpu" json:"max-cpu"`
+	MaxMetricsInFindAnswer   int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"`     //zero means infinite
+	MaxMetricsInRenderAnswer int              `toml:"max-metrics-in-render-answer" json:"max-metrics-in-render-answer"` //zero means infinite
+	TargetBlacklist          []string         `toml:"target-blacklist" json:"target-blacklist"`
+	Blacklist                []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
 }
 
 type ClickHouse struct {
@@ -123,8 +124,9 @@ func New() *Config {
 			// 	Duration: time.Minute,
 			// },
 			// MetricEndpoint: MetricEndpointLocal,
-			MaxCPU:                 1,
-			MaxMetricsInFindAnswer: 0,
+			MaxCPU:                   1,
+			MaxMetricsInFindAnswer:   0,
+			MaxMetricsInRenderAnswer: 0,
 		},
 		ClickHouse: ClickHouse{
 			Url:       "http://localhost:8123",
