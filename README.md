@@ -83,6 +83,9 @@ index-table = "graphite_index"
 # Use daily data from index table. This is useful for installations with big count of short-lived series but can be slower in other cases
 index-use-daily = true
 index-timeout = "1m"
+# Global max-interval for all queries (for example 5 years)
+# until - from <= {max-interval}
+# max-interval = "43800h"
 
 # `tagged` table from carbon-clickhouse. Required for seriesByTag
 tagged-table = ""

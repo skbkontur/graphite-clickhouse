@@ -68,6 +68,7 @@ type ClickHouse struct {
 	ExtraPrefix          string         `toml:"extra-prefix" json:"extra-prefix"`
 	ConnectTimeout       *Duration      `toml:"connect-timeout" json:"connect-timeout"`
 	Rollup               *rollup.Rollup `toml:"-" json:"rollup-conf"`
+	MaxInterval          *Duration      `toml:"max-interval" json:"max-interval"`
 }
 
 type Tags struct {
@@ -144,6 +145,9 @@ func New() *Config {
 			TagTable:             "",
 			TaggedAutocompleDays: 7,
 			ConnectTimeout:       &Duration{Duration: time.Second},
+			MaxInterval: &Duration{
+				0,
+			},
 		},
 		Tags: Tags{
 			Date:  "2016-11-01",
