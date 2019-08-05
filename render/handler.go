@@ -127,6 +127,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("finder", zap.Int("metrics", am.Len()))
 
+	if h.config.Common.MaxMetricsInRenderAnswer > 0 && h.config.Common.MaxMetricsInRenderAnswer < am.Len() {
+		logger.Info("limit", zap.Int("metric_render", am.Len()))
+		http.Error(w, fmt.Sprintf("Too much metric: %d", am.Len()), http.StatusForbidden)
+		return
+	}
+
 	pointsTable, isReverse, rollupObj := SelectDataTable(h.config, fromTimestamp, untilTimestamp, targets, config.ContextGraphite)
 	if pointsTable == "" {
 		logger.Error("data tables is not specified", zap.Error(err))
