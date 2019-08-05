@@ -106,6 +106,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.config.ClickHouse.MaxInterval.Nanoseconds() > 0 && int64(h.config.ClickHouse.MaxInterval.Seconds()) < untilTimestamp-fromTimestamp {
+		http.Error(w, "Too long time range", http.StatusForbidden)
+		return
+	}
+
 	am := alias.New()
 	targets := dry.RemoveEmptyStrings(r.Form["target"])
 
