@@ -1,3 +1,6 @@
+[![deb](https://img.shields.io/badge/deb-packagecloud.io-844fec.svg)](https://packagecloud.io/go-graphite/stable)
+[![rpm](https://img.shields.io/badge/rpm-packagecloud.io-844fec.svg)](https://packagecloud.io/go-graphite/stable)
+
 # graphite-clickhouse
 Graphite cluster backend with ClickHouse support
 
@@ -59,6 +62,9 @@ Create `/etc/graphite-clickhouse/graphite-clickhouse.conf`
 [common]
 listen = ":9090"
 max-cpu = 1
+# How frequently to call debug.FreeOSMemory() to return memory back to OS
+# Setting it to zero disables this functionality
+memory-return-interval = "0s"
 # Limit number of results from find query. Zero = unlimited
 max-metrics-in-find-answer = 0
 # Limit number of metrics from render query. Zero = unlimited

@@ -51,6 +51,7 @@ type Common struct {
 	MaxMetricsInRenderAnswer int              `toml:"max-metrics-in-render-answer" json:"max-metrics-in-render-answer"` //zero means infinite
 	TargetBlacklist          []string         `toml:"target-blacklist" json:"target-blacklist"`
 	Blacklist                []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
+	MemoryReturnInterval   *Duration        `toml:"memory-return-interval" json:"memory-return-interval"`
 }
 
 type ClickHouse struct {
@@ -149,6 +150,7 @@ func New() *Config {
 			MaxCPU:                   1,
 			MaxMetricsInFindAnswer:   0,
 			MaxMetricsInRenderAnswer: 0,
+			MemoryReturnInterval:   &Duration{},
 		},
 		ClickHouse: ClickHouse{
 			Url:             "http://localhost:8123",
