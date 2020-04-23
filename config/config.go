@@ -46,10 +46,11 @@ type Common struct {
 	// MetricPrefix   string    `toml:"metric-prefix"`
 	// MetricInterval *Duration `toml:"metric-interval"`
 	// MetricEndpoint string    `toml:"metric-endpoint"`
-	MaxCPU                 int              `toml:"max-cpu" json:"max-cpu"`
-	MaxMetricsInFindAnswer int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"` //zero means infinite
-	TargetBlacklist        []string         `toml:"target-blacklist" json:"target-blacklist"`
-	Blacklist              []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
+	MaxCPU                   int              `toml:"max-cpu" json:"max-cpu"`
+	MaxMetricsInFindAnswer   int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"`     //zero means infinite
+	MaxMetricsInRenderAnswer int              `toml:"max-metrics-in-render-answer" json:"max-metrics-in-render-answer"` //zero means infinite
+	TargetBlacklist          []string         `toml:"target-blacklist" json:"target-blacklist"`
+	Blacklist                []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
 	MemoryReturnInterval   *Duration        `toml:"memory-return-interval" json:"memory-return-interval"`
 }
 
@@ -71,6 +72,7 @@ type ClickHouse struct {
 	ConnectTimeout       *Duration `toml:"connect-timeout" json:"connect-timeout"`
 	DataTableLegacy      string    `toml:"data-table" json:"data-table"`
 	RollupConfLegacy     string    `toml:"rollup-conf" json:"-"`
+	MaxInterval          *Duration `toml:"max-interval" json:"max-interval"`
 }
 
 type Tags struct {
@@ -145,8 +147,9 @@ func New() *Config {
 			// 	Duration: time.Minute,
 			// },
 			// MetricEndpoint: MetricEndpointLocal,
-			MaxCPU:                 1,
-			MaxMetricsInFindAnswer: 0,
+			MaxCPU:                   1,
+			MaxMetricsInFindAnswer:   0,
+			MaxMetricsInRenderAnswer: 0,
 			MemoryReturnInterval:   &Duration{},
 		},
 		ClickHouse: ClickHouse{
@@ -168,6 +171,9 @@ func New() *Config {
 			TagTable:             "",
 			TaggedAutocompleDays: 7,
 			ConnectTimeout:       &Duration{Duration: time.Second},
+			MaxInterval: &Duration{
+				0,
+			},
 		},
 		Tags: Tags{
 			Date:  "2016-11-01",

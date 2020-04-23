@@ -67,6 +67,8 @@ max-cpu = 1
 memory-return-interval = "0s"
 # Limit number of results from find query. Zero = unlimited
 max-metrics-in-find-answer = 0
+# Limit number of metrics from render query. Zero = unlimited
+max-metrics-in-render-answer = 0
 # Daemon returns empty response if query matches any of regular expressions
 # target-blacklist = ["^not_found.*"]
 
@@ -89,6 +91,9 @@ index-table = "graphite_index"
 # Use daily data from index table. This is useful for installations with big count of short-lived series but can be slower in other cases
 index-use-daily = true
 index-timeout = "1m"
+# Global max-interval for all queries (for example 5 years)
+# until - from <= {max-interval}
+# max-interval = "43800h"
 
 # `tagged` table from carbon-clickhouse. Required for seriesByTag
 tagged-table = ""
