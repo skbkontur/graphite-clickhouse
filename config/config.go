@@ -48,6 +48,7 @@ type Common struct {
 	// MetricEndpoint string    `toml:"metric-endpoint"`
 	MaxCPU                 int              `toml:"max-cpu" json:"max-cpu"`
 	MaxMetricsInFindAnswer int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"` //zero means infinite
+	MaxMetricsInRenderAnswer int              `toml:"max-metrics-in-render-answer" json:"max-metrics-in-render-answer"` //zero means infinite
 	TargetBlacklist        []string         `toml:"target-blacklist" json:"target-blacklist"`
 	Blacklist              []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
 	MemoryReturnInterval   *Duration        `toml:"memory-return-interval" json:"memory-return-interval"`
