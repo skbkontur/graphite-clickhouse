@@ -73,6 +73,12 @@ func Handler(handler http.Handler) http.Handler {
 			logger = logger.With(zap.String("grafana", grafana))
 		}
 
+		/* Log carbonapi uuid for requests trace */
+		parentID := r.Header.Get("X-Ctx-Carbonapi-Uuid")
+		if parentID != "" {
+			logger = logger.With(zap.String("parent_id", parentID))
+		}
+
 		logger.Info("access",
 			zap.Duration("time", d),
 			zap.String("method", r.Method),
