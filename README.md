@@ -88,6 +88,8 @@ rollup-conf = "/etc/graphite-clickhouse/rollup.xml"
 index-table = "graphite_index"
 # Use daily data from index table. This is useful for installations with big count of short-lived series but can be slower in other cases
 index-use-daily = true
+# Allow use reverse queries to index table. This is useful when reverse queries has bad perfomance
+index-use-reverse = true
 index-timeout = "1m"
 
 # `tagged` table from carbon-clickhouse. Required for seriesByTag

@@ -43,6 +43,7 @@ func newPlainFinder(ctx context.Context, config *config.Config, query string, fr
 			config.ClickHouse.Url,
 			config.ClickHouse.IndexTable,
 			config.ClickHouse.IndexUseDaily,
+			config.ClickHouse.IndexUseReverse,
 			clickhouse.Options{
 				Timeout:        config.ClickHouse.IndexTimeout.Value(),
 				ConnectTimeout: config.ClickHouse.ConnectTimeout.Value(),
