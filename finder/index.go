@@ -19,16 +19,17 @@ const ReverseTreeLevelOffset = 30000
 const DefaultTreeDate = "1970-02-12"
 
 type IndexFinder struct {
-	url          string             // clickhouse dsn
-	table        string             // graphite_tree table
-	opts         clickhouse.Options // timeout, connectTimeout
-	dailyEnabled bool
-	body         []byte // clickhouse response body
-	useReverse   bool
-	useDaily     bool
+	url            string             // clickhouse dsn
+	table          string             // graphite_tree table
+	opts           clickhouse.Options // timeout, connectTimeout
+	dailyEnabled   bool
+	reverseEnabled bool
+	body           []byte // clickhouse response body
+	useReverse     bool
+	useDaily       bool
 }
 
-func NewIndex(url string, table string, dailyEnabled bool, opts clickhouse.Options) Finder {
+func NewIndex(url string, table string, dailyEnabled bool, reverseEnabled bool, opts clickhouse.Options) Finder {
 	return &IndexFinder{
 		url:          url,
 		table:        table,
@@ -48,13 +49,25 @@ func (idx *IndexFinder) where(query string, levelOffset int) *where.Where {
 	return w
 }
 
-func (idx *IndexFinder) Execute(ctx context.Context, query string, from int64, until int64) (err error) {
-	p := strings.LastIndexByte(query, '.')
+func useReverse(query string) bool {
+	if !where.HasWildcard(query) {
+		return false
+	}
 
-	if !where.HasWildcard(query) || p < 0 || p >= len(query)-1 || where.HasWildcard(query[p+1:]) {
-		idx.useReverse = false
-	} else {
-		idx.useReverse = true
+	p := strings.LastIndexByte(query, '.')
+	if p < 0 || p >= len(query)-1 {
+		return false
+	}
+	if where.HasWildcard(query[p+1:]) {
+		// last has wildcard
+		return false
+	}
+	return true
+}
+
+func (idx *IndexFinder) Execute(ctx context.Context, query string, from int64, until int64) (err error) {
+	if idx.reverseEnabled {
+		idx.useReverse = useReverse(query)
 	}
 
 	if idx.dailyEnabled && from > 0 && until > 0 {

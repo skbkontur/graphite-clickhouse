@@ -61,6 +61,7 @@ type ClickHouse struct {
 	DateTreeTableVersion int       `toml:"date-tree-table-version" json:"date-tree-table-version"`
 	IndexTable           string    `toml:"index-table" json:"index-table"`
 	IndexUseDaily        bool      `toml:"index-use-daily" json:"index-use-daily"`
+	IndexUseReverse      bool      `toml:"index-use-reverse" json:"index-use-reverse"`
 	IndexTimeout         *Duration `toml:"index-timeout" json:"index-timeout"`
 	TaggedTable          string    `toml:"tagged-table" json:"tagged-table"`
 	TaggedAutocompleDays int       `toml:"tagged-autocomplete-days" json:"tagged-autocomplete-days"`
@@ -159,8 +160,9 @@ func New() *Config {
 			TreeTimeout: &Duration{
 				Duration: time.Minute,
 			},
-			IndexTable:    "",
-			IndexUseDaily: true,
+			IndexTable:      "",
+			IndexUseDaily:   true,
+			IndexUseReverse: true,
 			IndexTimeout: &Duration{
 				Duration: time.Minute,
 			},
