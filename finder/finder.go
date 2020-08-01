@@ -7,6 +7,8 @@ import (
 	"github.com/lomik/graphite-clickhouse/helper/clickhouse"
 
 	"github.com/lomik/graphite-clickhouse/config"
+
+	"github.com/lomik/graphite-clickhouse/pkg/where"
 )
 
 type Result interface {
@@ -43,6 +45,7 @@ func newPlainFinder(ctx context.Context, config *config.Config, query string, fr
 			config.ClickHouse.Url,
 			config.ClickHouse.IndexTable,
 			config.ClickHouse.IndexUseDaily,
+			config.ClickHouse.IndexUseReverse,
 			clickhouse.Options{
 				Timeout:        config.ClickHouse.IndexTimeout.Value(),
 				ConnectTimeout: config.ClickHouse.ConnectTimeout.Value(),
@@ -76,6 +79,7 @@ func newPlainFinder(ctx context.Context, config *config.Config, query string, fr
 }
 
 func Find(config *config.Config, ctx context.Context, query string, from int64, until int64) (Result, error) {
+	query = where.ClearGlob(query)
 	fnd := newPlainFinder(ctx, config, query, from, until)
 	err := fnd.Execute(ctx, query, from, until)
 	if err != nil {

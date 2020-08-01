@@ -46,12 +46,12 @@ type Common struct {
 	// MetricPrefix   string    `toml:"metric-prefix"`
 	// MetricInterval *Duration `toml:"metric-interval"`
 	// MetricEndpoint string    `toml:"metric-endpoint"`
-	MaxCPU                 int              `toml:"max-cpu" json:"max-cpu"`
-	MaxMetricsInFindAnswer int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"` //zero means infinite
+	MaxCPU                   int              `toml:"max-cpu" json:"max-cpu"`
+	MaxMetricsInFindAnswer   int              `toml:"max-metrics-in-find-answer" json:"max-metrics-in-find-answer"`     //zero means infinite
 	MaxMetricsInRenderAnswer int              `toml:"max-metrics-in-render-answer" json:"max-metrics-in-render-answer"` //zero means infinite
-	TargetBlacklist        []string         `toml:"target-blacklist" json:"target-blacklist"`
-	Blacklist              []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
-	MemoryReturnInterval   *Duration        `toml:"memory-return-interval" json:"memory-return-interval"`
+	TargetBlacklist          []string         `toml:"target-blacklist" json:"target-blacklist"`
+	Blacklist                []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
+	MemoryReturnInterval     *Duration        `toml:"memory-return-interval" json:"memory-return-interval"`
 }
 
 type ClickHouse struct {
@@ -62,6 +62,7 @@ type ClickHouse struct {
 	DateTreeTableVersion int       `toml:"date-tree-table-version" json:"date-tree-table-version"`
 	IndexTable           string    `toml:"index-table" json:"index-table"`
 	IndexUseDaily        bool      `toml:"index-use-daily" json:"index-use-daily"`
+	IndexUseReverse      int       `toml:"index-use-reverse" json:"index-use-reverse"`
 	IndexTimeout         *Duration `toml:"index-timeout" json:"index-timeout"`
 	TaggedTable          string    `toml:"tagged-table" json:"tagged-table"`
 	TaggedAutocompleDays int       `toml:"tagged-autocomplete-days" json:"tagged-autocomplete-days"`
@@ -160,8 +161,9 @@ func New() *Config {
 			TreeTimeout: &Duration{
 				Duration: time.Minute,
 			},
-			IndexTable:    "",
-			IndexUseDaily: true,
+			IndexTable:      "",
+			IndexUseDaily:   true,
+			IndexUseReverse: 1,
 			IndexTimeout: &Duration{
 				Duration: time.Minute,
 			},

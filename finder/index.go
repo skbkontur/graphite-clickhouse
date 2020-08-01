@@ -23,17 +23,19 @@ type IndexFinder struct {
 	table        string             // graphite_tree table
 	opts         clickhouse.Options // timeout, connectTimeout
 	dailyEnabled bool
+	reverseDepth int
 	body         []byte // clickhouse response body
 	useReverse   bool
 	useDaily     bool
 }
 
-func NewIndex(url string, table string, dailyEnabled bool, opts clickhouse.Options) Finder {
+func NewIndex(url string, table string, dailyEnabled bool, reverseDepth int, opts clickhouse.Options) Finder {
 	return &IndexFinder{
 		url:          url,
 		table:        table,
 		opts:         opts,
 		dailyEnabled: dailyEnabled,
+		reverseDepth: reverseDepth,
 	}
 }
 
@@ -48,14 +50,71 @@ func (idx *IndexFinder) where(query string, levelOffset int) *where.Where {
 	return w
 }
 
-func (idx *IndexFinder) Execute(ctx context.Context, query string, from int64, until int64) (err error) {
-	p := strings.LastIndexByte(query, '.')
-
-	if !where.HasWildcard(query) || p < 0 || p >= len(query)-1 || where.HasWildcard(query[p+1:]) {
-		idx.useReverse = false
-	} else {
-		idx.useReverse = true
+func useReverse(query string) bool {
+	if !where.HasWildcard(query) {
+		return false
 	}
+
+	p := strings.LastIndexByte(query, '.')
+	if p < 0 || p >= len(query)-1 {
+		return false
+	}
+	if where.HasWildcard(query[p+1:]) {
+		// last has wildcard
+		return false
+	}
+	return true
+}
+
+func useReverseDepth(query string, reverseDepth int) bool {
+	if reverseDepth == -1 {
+		return false
+	}
+
+	w := where.IndexWildcardOrDot(query)
+	if w == -1 || query[w] == '.' {
+		if reverseDepth == 0 {
+			return false
+		} else if reverseDepth == 1 {
+			return useReverse(query)
+		}
+	} else {
+		reverseDepth = 1
+	}
+
+	w = where.IndexReverseWildcard(query)
+	if w == -1 {
+		return false
+	}
+	p := len(query)
+	if w == p-1 {
+		return false
+	}
+	depth := 0
+
+	for {
+		e := strings.LastIndexByte(query[w+1:p], '.')
+		if e < 0 {
+			break
+		} else if e < len(query)-1 {
+			if where.HasWildcard(query[w+e+1 : p]) {
+				break
+			}
+			depth++
+			if depth > reverseDepth {
+				return true
+			}
+			if e == 0 {
+				break
+			}
+		}
+		p = w + e - 1
+	}
+	return false
+}
+
+func (idx *IndexFinder) Execute(ctx context.Context, query string, from int64, until int64) (err error) {
+	idx.useReverse = useReverseDepth(query, idx.reverseDepth)
 
 	if idx.dailyEnabled && from > 0 && until > 0 {
 		idx.useDaily = true

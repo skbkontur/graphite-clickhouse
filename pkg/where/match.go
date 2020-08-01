@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// clearGlob cleanup grafana false glob like {name}
-func clearGlob(query string) string {
+// ClearGlob cleanup grafana false glob like {name}
+func ClearGlob(query string) string {
 	p := 0
 	s := strings.IndexAny(query, "{[")
 	if s == -1 {
@@ -74,8 +74,6 @@ func glob(field string, query string, optionalDotAtEnd bool) string {
 	if query == "*" {
 		return ""
 	}
-
-	query = clearGlob(query)
 
 	if !HasWildcard(query) {
 		if optionalDotAtEnd {
