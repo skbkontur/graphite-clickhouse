@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lomik/graphite-clickhouse/config"
 	"github.com/lomik/graphite-clickhouse/helper/clickhouse"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/pkg/where"
@@ -24,18 +25,20 @@ type IndexFinder struct {
 	opts         clickhouse.Options // timeout, connectTimeout
 	dailyEnabled bool
 	reverseDepth int
+	revSuffix    []config.NValue
 	body         []byte // clickhouse response body
 	useReverse   bool
 	useDaily     bool
 }
 
-func NewIndex(url string, table string, dailyEnabled bool, reverseDepth int, opts clickhouse.Options) Finder {
+func NewIndex(url string, table string, dailyEnabled bool, reverseDepth int, reverseSuffix []config.NValue, opts clickhouse.Options) Finder {
 	return &IndexFinder{
 		url:          url,
 		table:        table,
 		opts:         opts,
 		dailyEnabled: dailyEnabled,
 		reverseDepth: reverseDepth,
+		revSuffix:    reverseSuffix,
 	}
 }
 
@@ -66,13 +69,25 @@ func useReverse(query string) bool {
 	return true
 }
 
-func useReverseDepth(query string, reverseDepth int) bool {
+func reverseSuffixDepth(query string, reverseDepth int, revSuffix []config.NValue) int {
+	for i := range revSuffix {
+		if strings.HasSuffix(query, revSuffix[i].Name) {
+			return revSuffix[i].Value
+		}
+	}
+	return reverseDepth
+}
+
+func useReverseDepth(query string, reverseDepth int, revSuffix []config.NValue) bool {
 	if reverseDepth == -1 {
 		return false
 	}
 
 	w := where.IndexWildcardOrDot(query)
-	if w == -1 || query[w] == '.' {
+	if w == -1 {
+		return false
+	} else if query[w] == '.' {
+		reverseDepth = reverseSuffixDepth(query, reverseDepth, revSuffix)
 		if reverseDepth == 0 {
 			return false
 		} else if reverseDepth == 1 {
@@ -114,7 +129,7 @@ func useReverseDepth(query string, reverseDepth int) bool {
 }
 
 func (idx *IndexFinder) Execute(ctx context.Context, query string, from int64, until int64) (err error) {
-	idx.useReverse = useReverseDepth(query, idx.reverseDepth)
+	idx.useReverse = useReverseDepth(query, idx.reverseDepth, idx.revSuffix)
 
 	if idx.dailyEnabled && from > 0 && until > 0 {
 		idx.useDaily = true

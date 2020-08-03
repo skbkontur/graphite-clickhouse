@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/lomik/graphite-clickhouse/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -45,6 +46,6 @@ func Test_useReverseDepth(t *testing.T) {
 	}
 
 	for _, tt := range table {
-		assert.Equal(tt.result, useReverseDepth(tt.query, tt.depth), fmt.Sprintf("%s with depth %d", tt.query, tt.depth))
+		assert.Equal(tt.result, useReverseDepth(tt.query, tt.depth, []config.NValue{}), fmt.Sprintf("%s with depth %d", tt.query, tt.depth))
 	}
 }
