@@ -43,6 +43,7 @@ func Test_useReverseDepth(t *testing.T) {
 		{"a.b.c.d*.e", 2, false},
 		{"a*.b.c.d*.e", 2, true}, // Wildcard at first level, use reverse if possible
 		{"a.b*.c.d*.e", 2, false},
+		{"a.*.c.*.e.*.j", 2, false},
 	}
 
 	for _, tt := range table {
