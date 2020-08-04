@@ -28,7 +28,7 @@ func HasWildcard(target string) bool {
 }
 
 func IndexReverseWildcard(target string) int {
-	return strings.IndexAny(target, "[]{}*?")
+	return strings.LastIndexAny(target, "[]{}*?")
 }
 
 func IndexWildcardOrDot(target string) int {

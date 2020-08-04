@@ -116,7 +116,7 @@ func useReverseDepth(query string, reverseDepth int, revSuffix []config.NValue) 
 				break
 			}
 			depth++
-			if depth > reverseDepth {
+			if depth >= reverseDepth {
 				return true
 			}
 			if e == 0 {
