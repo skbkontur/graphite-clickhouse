@@ -77,6 +77,9 @@ func reverseSuffixDepth(query string, defaultReverseDepth int, revSuffix []confi
 		if len(revSuffix[i].Suffix) > 0 && !strings.HasSuffix(query, revSuffix[i].Suffix) {
 			continue
 		}
+		if len(revSuffix[i].Prefix) == 0 && len(revSuffix[i].Suffix) == 0 {
+			continue
+		}
 		return revSuffix[i].Value
 	}
 	return defaultReverseDepth
