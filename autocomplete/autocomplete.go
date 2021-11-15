@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-graphite/carbonapi/pkg/parser"
 	"github.com/lomik/graphite-clickhouse/config"
 	"github.com/lomik/graphite-clickhouse/finder"
 	"github.com/lomik/graphite-clickhouse/helper/clickhouse"
+	"github.com/lomik/graphite-clickhouse/helper/utils"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/pkg/where"
 )
@@ -197,6 +199,26 @@ func (h *Handler) ServeTags(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
+func taggedKey(truncateSec int32, fromDate, untilDate string, tag string, exprs []string) string {
+	ts := utils.TimestampTruncate(time.Now().Unix(), time.Duration(truncateSec)*time.Second)
+	var sb strings.Builder
+	sb.Grow(128)
+	sb.WriteString(fromDate)
+	sb.WriteString(";")
+	sb.WriteString(untilDate)
+	sb.WriteString(";tag=")
+	sb.WriteString(tag)
+	for _, expr := range exprs {
+		sb.WriteString(";expr=")
+		sb.WriteString(expr)
+
+	}
+	sb.WriteString(";ts=")
+	sb.WriteString(strconv.FormatInt(ts, 10))
+
+	return sb.String()
+}
+
 func (h *Handler) ServeValues(w http.ResponseWriter, r *http.Request) {
 	// logger := log.FromContext(r.Context())
 
@@ -220,45 +242,69 @@ func (h *Handler) ServeValues(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	wr, pw, usedTags, err := h.requestExpr(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	now := time.Now()
+	fromDate := now.AddDate(0, 0, -h.config.ClickHouse.TaggedAutocompleDays).Format("2006-01-02")
+	untilDate := now.Format("2006-01-02")
+
+	var key string
+	var body []byte
+
+	useCache := h.config.Common.FindCache != nil && !parser.TruthyBool(r.FormValue("noCache"))
+	if useCache {
+		// logger = logger.With(zap.String("use_cache", "true"))
+		key = taggedKey(h.config.Common.FindCacheConfig.ShortTimeoutSec, fromDate, untilDate, r.FormValue("tag"), r.Form["expr"])
+		body, err = h.config.Common.FindCache.Get(key)
+		if err == nil {
+			// ApiMetrics.RequestCacheHits.Add(1)
+			w.Header().Set("X-Cached-Find", "true")
+		}
+		// ApiMetrics.RequestCacheMisses.Add(1)
 	}
 
-	var valueSQL string
-	if len(usedTags) == 0 {
-		valueSQL = fmt.Sprintf("substr(Tag1, %d) AS value", len(tag)+2)
-		wr.And(where.HasPrefix("Tag1", tag+"="+valuePrefix))
-	} else {
-		valueSQL = fmt.Sprintf("substr(arrayJoin(Tags), %d) AS value", len(tag)+2)
-		wr.And(where.HasPrefix("arrayJoin(Tags)", tag+"="+valuePrefix))
-	}
+	if len(body) == 0 {
+		wr, pw, usedTags, err := h.requestExpr(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
-	fromDate := time.Now().AddDate(0, 0, -h.config.ClickHouse.TaggedAutocompleDays)
-	wr.Andf("Date >= '%s'", fromDate.Format("2006-01-02"))
+		var valueSQL string
+		if len(usedTags) == 0 {
+			valueSQL = fmt.Sprintf("substr(Tag1, %d) AS value", len(tag)+2)
+			wr.And(where.HasPrefix("Tag1", tag+"="+valuePrefix))
+		} else {
+			valueSQL = fmt.Sprintf("substr(arrayJoin(Tags), %d) AS value", len(tag)+2)
+			wr.And(where.HasPrefix("arrayJoin(Tags)", tag+"="+valuePrefix))
+		}
 
-	sql := fmt.Sprintf("SELECT %s FROM %s %s %s GROUP BY value ORDER BY value LIMIT %d",
-		valueSQL,
-		h.config.ClickHouse.TaggedTable,
-		pw.PreWhereSQL(),
-		wr.SQL(),
-		limit,
-	)
+		wr.Andf("Date >= '%s'", fromDate)
 
-	body, err := clickhouse.Query(
-		scope.WithTable(r.Context(), h.config.ClickHouse.TaggedTable),
-		h.config.ClickHouse.URL,
-		sql,
-		clickhouse.Options{
-			Timeout:        h.config.ClickHouse.IndexTimeout,
-			ConnectTimeout: h.config.ClickHouse.ConnectTimeout,
-		},
-		nil,
-	)
-	if err != nil {
-		clickhouse.HandleError(w, err)
-		return
+		sql := fmt.Sprintf("SELECT %s FROM %s %s %s GROUP BY value ORDER BY value LIMIT %d",
+			valueSQL,
+			h.config.ClickHouse.TaggedTable,
+			pw.PreWhereSQL(),
+			wr.SQL(),
+			limit,
+		)
+
+		body, err = clickhouse.Query(
+			scope.WithTable(r.Context(), h.config.ClickHouse.TaggedTable),
+			h.config.ClickHouse.URL,
+			sql,
+			clickhouse.Options{
+				Timeout:        h.config.ClickHouse.IndexTimeout,
+				ConnectTimeout: h.config.ClickHouse.ConnectTimeout,
+			},
+			nil,
+		)
+		if err != nil {
+			clickhouse.HandleError(w, err)
+			return
+		}
+
+		if useCache {
+			h.config.Common.FindCache.Set(key, body, h.config.Common.FindCacheConfig.ShortTimeoutSec)
+		}
 	}
 
 	rows := strings.Split(string(body), "\n")
