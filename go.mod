@@ -4,6 +4,8 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
+	github.com/dgryski/go-expirecache v0.0.0-20170314133854-743ef98b2adb
 	github.com/go-graphite/carbonapi v0.0.0-20180220165555-9db1310e484a
 	github.com/go-graphite/protocol v0.4.3
 	github.com/gogo/protobuf v1.2.1
