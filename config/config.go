@@ -21,11 +21,12 @@ import (
 
 // Cache config
 type CacheConfig struct {
-	Type              string   `mapstructure:"type"`
-	Size              int      `mapstructure:"size_mb"`
-	MemcachedServers  []string `mapstructure:"memcachedServers"`
-	DefaultTimeoutSec int32    `mapstructure:"defaultTimeoutSec"`
-	ShortTimeoutSec   int32    `mapstructure:"shortTimeoutSec"`
+	Type              string        `mapstructure:"type"`
+	Size              int           `mapstructure:"size_mb"`
+	MemcachedServers  []string      `mapstructure:"memcachedServers"`
+	DefaultTimeoutSec int32         `mapstructure:"defaultTimeoutSec"`
+	ShortTimeoutSec   int32         `mapstructure:"shortTimeoutSec"`
+	ShortDuration     time.Duration `mapstructure:"shortDuration"`
 }
 
 // Common config
@@ -519,6 +520,9 @@ func CreateCache(cacheName string, cacheConfig *CacheConfig) (cache.BytesCache, 
 	}
 	if cacheConfig.DefaultTimeoutSec < cacheConfig.ShortTimeoutSec || cacheConfig.ShortTimeoutSec <= 0 {
 		cacheConfig.ShortTimeoutSec = cacheConfig.DefaultTimeoutSec
+	}
+	if cacheConfig.ShortDuration == 0 {
+		cacheConfig.ShortDuration = 3 * time.Hour
 	}
 	switch cacheConfig.Type {
 	case "memcache":

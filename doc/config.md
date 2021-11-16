@@ -3,6 +3,33 @@
 
 # Configuration
 
+## Common  `[common]`
+
+### Finder cache
+
+Specify what storage to use for finder cache. This cache stores finder results (metrics find/tags autocomplete/render).
+
+Supported cache types:
+ - `mem` - will use integrated in-memory cache. Not distributed. Fast.
+ - `memcache` - will use specified memcache servers. Could be shared. Slow.
+ - `null` - disable cache
+
+Extra options:
+ - `size_mb` - specify max size of cache, in MiB
+ - `defaultTimeoutSec` - specify default cache ttl.
+ - `shortTimeoutSec` - cache ttl for short duration intervals of render queries (duration <= shortDuration && now-until <= 61)
+ - `shortDuration` - maximum duration for render queries, which use shortTimeoutSec duration
+
+### Example
+```yaml
+[common.find-cache]
+type = "memcache"
+size_mb = 0
+memcachedServers = [ "127.0.0.1:1234", "127.0.0.2:1235" ]
+defaultTimeoutSec = 10800
+shortTimeoutSec = 600
+```
+
 ## ClickHouse `[clickhouse]`
 
 ### URL `url`
@@ -96,6 +123,15 @@ It's possible to set multiple loggers. See `Config` description in [config.go](h
  memory-return-interval = "0s"
  # additional request headers to log
  headers-to-log = []
+
+ # find cache config
+ [common.find-cache]
+  Type = "null"
+  Size = 0
+  MemcachedServers = []
+  DefaultTimeoutSec = 0
+  ShortTimeoutSec = 0
+  ShortDuration = "0s"
 
 [clickhouse]
  # see https://clickhouse.tech/docs/en/interfaces/http

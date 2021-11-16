@@ -41,7 +41,7 @@ func TargetKey(fromAndUntil string, ts int64, target string) string {
 
 func getCacheTimeout(now time.Time, from, until int64, cacheConfig *config.CacheConfig) int32 {
 	duration := time.Second * time.Duration(until-from)
-	if duration <= 3*time.Hour && now.Unix()-until <= 61 {
+	if duration <= cacheConfig.ShortDuration && now.Unix()-until <= 61 {
 		// short cache ttl
 		return cacheConfig.ShortTimeoutSec
 	}

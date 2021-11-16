@@ -11,6 +11,7 @@ func Test_getCacheTimeout(t *testing.T) {
 	cacheConfig := config.CacheConfig{
 		ShortTimeoutSec:   60,
 		DefaultTimeoutSec: 300,
+		ShortDuration:     3 * time.Hour,
 	}
 
 	now := int64(1636985018)
