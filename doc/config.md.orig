@@ -1,3 +1,6 @@
+[//]: # (This file is built out of deploy/doc/config.md, please do not edit it manually)  
+[//]: # (To rebuild it run `make config`)
+
 # Configuration
 
 ## Common  `[common]`
@@ -90,46 +93,6 @@ When `reverse = true` is set for data-table, there are two possibles cases for [
 
 Depends on it for having a proper retention and aggregation you must additionally set `rollup-use-reverted = true` for the first case and `rollup-use-reverted = false` for the second.
 
-#### Additional tuning tagged find for seriesByTag and autocomplete
-Only one tag used as filter for index field Tag1, see graphite_tagged table [structure](https://github.com/lomik/carbon-clickhouse#clickhouse-configuration)
-
-So, if the first tag in filter is costly (poor selectivity), like environment (with several possible values), query perfomance will be degraded.
-Tune this with `tagged-costs` options (costs in range 1-1000 or -1, lowest is prefered):
-
-`
-tagged-costs = {
-  default = 50,
-  wildcard = 600,
-  costs = {
-    "environment" = {
-      default = 100
-    },
-    "team" = {
-      default = 95
-    },
-    "proj" = {
-      default = 90
-    },
-    "project" = {
-      default = 90
-    },
-    "subproject" = {
-      values = {
-        "HighCost" = 85,
-        "LowCost" = 40
-      }
-    },
-    "aggregate" = {
-      default = 95
-    },
-    "com.docker.stack.namespace" = {
-      default = -1
-    }
-  }
-}`
-
-Default cost is 0. So if environment is first tag filter in query, it will used as primary only if no other filters with some operation (equal, for example)
-
 ## Carbonlink `[carbonlink]`
 The configuration to get metrics from carbon-cache. See details in [graphite-web](https://graphite.readthedocs.io/en/latest/carbon-daemons.html#carbon-relay-py) documentation.
 
@@ -142,3 +105,165 @@ It's possible to set multiple loggers. See `Config` description in [config.go](h
 
 # Example
 
+
+```toml
+[common]
+ # general listener
+ listen = ":9090"
+ # listener to serve /debug/pprof requests. '-pprof' argument overrides it
+ pprof-listen = ""
+ max-cpu = 1
+ # limit number of results from find query, 0=unlimited
+ max-metrics-in-find-answer = 0
+ # limit numbers of queried metrics per target in /render requests, 0 or negative = unlimited
+ max-metrics-per-target = 15000
+ # daemon returns empty response if query matches any of regular expressions
+ # target-blacklist = []
+ # daemon will return the freed memory to the OS when it>0
+ memory-return-interval = "0s"
+ # additional request headers to log
+ headers-to-log = []
+
+ # find cache config
+ [common.find-cache]
+  Type = "null"
+  Size = 0
+  MemcachedServers = []
+  DefaultTimeoutSec = 0
+  ShortTimeoutSec = 0
+  ShortDuration = "0s"
+
+[clickhouse]
+ # see https://clickhouse.tech/docs/en/interfaces/http
+ url = "http://localhost:8123?cancel_http_readonly_queries_on_client_close=1"
+ # total timeout to fetch data
+ data-timeout = "1m0s"
+ # see doc/index-table.md
+ index-table = "graphite_index"
+ index-use-daily = true
+ # see doc/config.md
+ index-reverse = "auto"
+
+ # [[clickhouse.index-reverses]]
+  # rule is used when the target suffix is matched
+  # suffix = "suffix"
+  # same as index-reverse
+  # reverse = "auto"
+
+ # [[clickhouse.index-reverses]]
+  # rule is used when the target prefix is matched
+  # prefix = "prefix"
+  # same as index-reverse
+  # reverse = "direct"
+
+ # [[clickhouse.index-reverses]]
+  # rule is used when the target regex is matched
+  # regex = "regex"
+  # same as index-reverse
+  # reverse = "reversed"
+ # total timeout to fetch series list from index
+ index-timeout = "1m0s"
+ # 'tagged' table from carbon-clickhouse, required for seriesByTag
+ tagged-table = "graphite_tagged"
+ # or how long the daemon will query tags during autocomplete
+ tagged-autocomplete-days = 7
+ # old index table, DEPRECATED, see description in doc/config.md
+ # tree-table = ""
+ # reverse-tree-table = ""
+ # date-tree-table = ""
+ # date-tree-table-version = 0
+ # tree-timeout = "0s"
+ # is not recommended to use, https://github.com/lomik/graphite-clickhouse/wiki/TagsRU
+ # tag-table = ""
+ # add extra prefix (directory in graphite) for all metrics, w/o trailing dot
+ extra-prefix = ""
+ # TCP connection timeout
+ connect-timeout = "1s"
+ # will be removed in 0.14
+ # data-table = ""
+ # rollup-conf = "auto"
+ # max points per metric when internal-aggregation=true
+ max-data-points = 1048576
+ # ClickHouse-side aggregation, see doc/aggregation.md
+ internal-aggregation = true
+
+[[data-table]]
+ # data table from carbon-clickhouse
+ table = "graphite_data"
+ # if it stores direct or reversed metrics
+ reverse = false
+ # maximum age stored in the table
+ max-age = "0s"
+ # minimum age stored in the table
+ min-age = "0s"
+ # maximum until-from interval allowed for the table
+ max-interval = "0s"
+ # minimum until-from interval allowed for the table
+ min-interval = "0s"
+ # table allowed only if any metrics in target matches regexp
+ target-match-any = ""
+ # table allowed only if all metrics in target matches regexp
+ target-match-all = ""
+ # custom rollup.xml file for table, 'auto' and 'none' are allowed as well
+ rollup-conf = "auto"
+ # custom table for 'rollup-conf=auto', useful for Distributed or MatView
+ rollup-auto-table = ""
+ # is used when none of rules match
+ rollup-default-precision = 0
+ # is used when none of rules match
+ rollup-default-function = ""
+ # should be set to true if you don't have reverted regexps in rollup-conf for reversed tables
+ rollup-use-reverted = false
+ # valid values are 'graphite' of 'prometheus'
+ context = []
+
+# is not recommended to use, https://github.com/lomik/graphite-clickhouse/wiki/TagsRU
+# [tags]
+ # rules = ""
+ # date = ""
+ # extra-where = ""
+ # input-file = ""
+ # output-file = ""
+
+[carbonlink]
+ server = ""
+ threads-per-request = 10
+ connect-timeout = "50ms"
+ query-timeout = "50ms"
+ # timeout for querying and parsing response
+ total-timeout = "500ms"
+
+[prometheus]
+ # allows to set URL for redirect manually
+ external-url = ""
+ page-title = "Prometheus Time Series Collection and Processing Server"
+
+# see doc/debugging.md
+[debug]
+ # the directory for additional debug output
+ directory = ""
+ # permissions for directory, octal value is set as 0o755
+ directory-perm = 493
+ # permissions for directory, octal value is set as 0o640
+ external-data-perm = 0
+
+[[logging]]
+ # handler name, default empty
+ logger = ""
+ # '/path/to/filename', 'stderr', 'stdout', 'empty' (=='stderr'), 'none'
+ file = "/var/log/graphite-clickhouse/graphite-clickhouse.log"
+ # 'debug', 'info', 'warn', 'error', 'dpanic', 'panic', and 'fatal'
+ level = "info"
+ # 'json' or 'console'
+ encoding = "mixed"
+ # 'millis', 'nanos', 'epoch', 'iso8601'
+ encoding-time = "iso8601"
+ # 'seconds', 'nanos', 'string'
+ encoding-duration = "seconds"
+ # passed to time.ParseDuration
+ sample-tick = ""
+ # first n messages logged per tick
+ sample-initial = 0
+ # every m-th message logged thereafter per tick
+ sample-thereafter = 0
+```

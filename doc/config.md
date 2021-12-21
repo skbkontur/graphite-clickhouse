@@ -93,6 +93,46 @@ When `reverse = true` is set for data-table, there are two possibles cases for [
 
 Depends on it for having a proper retention and aggregation you must additionally set `rollup-use-reverted = true` for the first case and `rollup-use-reverted = false` for the second.
 
+#### Additional tuning tagged find for seriesByTag and autocomplete
+Only one tag used as filter for index field Tag1, see graphite_tagged table [structure](https://github.com/lomik/carbon-clickhouse#clickhouse-configuration)
+
+So, if the first tag in filter is costly (poor selectivity), like environment (with several possible values), query perfomance will be degraded.
+Tune this with `tagged-costs` options (costs in range 1-1000 or -1, lowest is prefered):
+
+`
+tagged-costs = {
+  default = 50,
+  wildcard = 600,
+  costs = {
+    "environment" = {
+      default = 100
+    },
+    "team" = {
+      default = 95
+    },
+    "proj" = {
+      default = 90
+    },
+    "project" = {
+      default = 90
+    },
+    "subproject" = {
+      values = {
+        "HighCost" = 85,
+        "LowCost" = 40
+      }
+    },
+    "aggregate" = {
+      default = 95
+    },
+    "com.docker.stack.namespace" = {
+      default = -1
+    }
+  }
+}`
+
+Default cost is 0. So if environment is first tag filter in query, it will used as primary only if no other filters with some operation (equal, for example)
+
 ## Carbonlink `[carbonlink]`
 The configuration to get metrics from carbon-cache. See details in [graphite-web](https://graphite.readthedocs.io/en/latest/carbon-daemons.html#carbon-relay-py) documentation.
 
@@ -132,6 +172,14 @@ It's possible to set multiple loggers. See `Config` description in [config.go](h
   DefaultTimeoutSec = 0
   ShortTimeoutSec = 0
   ShortDuration = "0s"
+
+ # find cache config
+ [common.find-cache]
+  Type = "null"
+  Size = 0
+  MemcachedServers = []
+  DefaultTimeoutSec = 0
+  ShortTimeoutSec = 0
 
 [clickhouse]
  # see https://clickhouse.tech/docs/en/interfaces/http
