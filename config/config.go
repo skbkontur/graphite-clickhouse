@@ -76,18 +76,6 @@ var IndexReverse = map[string]uint8{
 // IndexReverseNames contains valid names for index-reverse setting
 var IndexReverseNames = []string{"auto", "direct", "reversed"}
 
-type Costs struct {
-	Wildcard int            `toml:"wildcard" json:"cost" comment:"cost for wildcarded equalence or matched with regex (if not found in values)"`
-	Default  int            `toml:"default" json:"default" comment:"default cost for equalence without wildcards (if not found in values)"`
-	Values   map[string]int `toml:"values" json:"values" comment:"cost with some value (for equalence or with wildcard or regex) (additional tuning, usually not needed)"`
-}
-
-type TaggedCosts struct {
-	Costs    map[string]*Costs `toml:"costs" json:"costs" commented:"true" comment:"tune cost for tags values (with  or without wildcards or regex"`
-	Default  int               `toml:"default" json:"default" commented:"true" comment:"default cost (without wildcard or regex)"`
-	Wildcard int               `toml:"wildcard" json:"wildcard" commented:"true" comment:"default cost (with wildcard or regex)"`
-}
-
 // ClickHouse config
 type ClickHouse struct {
 	URL                  string        `toml:"url" json:"url" comment:"see https://clickhouse.tech/docs/en/interfaces/http"`
@@ -421,9 +409,14 @@ func Unmarshal(body []byte) (*Config, error) {
 		}
 	}
 
-	err = CheckTaggedCosts(cfg.ClickHouse.TaggedCosts)
-	if err != nil {
-		return nil, err
+	if cfg.ClickHouse.TaggedCosts != nil {
+		err = cfg.ClickHouse.TaggedCosts.Check()
+		if err != nil {
+			return nil, err
+		}
+		if cfg.ClickHouse.TaggedCosts.AutoLoad > 0 {
+
+		}
 	}
 
 	err = cfg.ProcessDataTables()
@@ -556,38 +549,4 @@ func CreateCache(cacheName string, cacheConfig *CacheConfig) (cache.BytesCache, 
 	default:
 		return nil, fmt.Errorf("%s: unknown cache type '%s', known_cache_types 'null', 'mem', 'memcache'", cacheName, cacheConfig.Type)
 	}
-}
-
-func CheckTaggedCosts(taggedCosts *TaggedCosts) error {
-	if taggedCosts != nil {
-		if taggedCosts.Default < 1 || taggedCosts.Default > 1000 {
-			return fmt.Errorf("default tagged cost must be > 0 and <= 1000")
-		}
-		if taggedCosts.Default >= taggedCosts.Wildcard {
-			return fmt.Errorf("wildcard tagged cost must be greater than default")
-		}
-
-		for key, costs := range taggedCosts.Costs {
-			if costs.Default == 0 {
-				costs.Default = taggedCosts.Default
-			} else if costs.Default > 1000 {
-				return fmt.Errorf("default tagged cost[%s] must be > 0 and <= 1000 or -1", key)
-			}
-			if costs.Wildcard == 0 {
-				costs.Wildcard = taggedCosts.Wildcard
-			} else if costs.Wildcard > 1000 {
-				return fmt.Errorf("wildcard tagged cost[%s] must be > 0 and <= 1000 or -1", key)
-			}
-		}
-
-		if costs, ok := taggedCosts.Costs["name"]; ok {
-			if _, ok := taggedCosts.Costs["__name__"]; ok {
-				return fmt.Errorf("duplicate tagged name and __name__ in tagged costs")
-			}
-			taggedCosts.Costs["__name__"] = costs
-			delete(taggedCosts.Costs, "name")
-		}
-	}
-
-	return nil
 }

@@ -152,6 +152,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if cfg.ClickHouse.TaggedCosts != nil && cfg.ClickHouse.TaggedCosts.AutoLoad > 0 {
+		start := time.Now()
+		if err = cfg.ClickHouse.TaggedCosts.Update(cfg.ClickHouse.URL, cfg.ClickHouse.TaggedTable, cfg.ClickHouse.TaggedAutocompleDays); err != nil {
+			zapwriter.Logger("tagged_costs").Error("unable to load", zap.Error(err), zap.Duration("time", time.Since(start)))
+		} else {
+			zapwriter.Logger("tagged_costs").Info("load", zap.Duration("time", time.Since(start)))
+		}
+		go cfg.ClickHouse.TaggedCosts.Updater(cfg.ClickHouse.URL, cfg.ClickHouse.TaggedTable, cfg.ClickHouse.TaggedAutocompleDays)
+	}
+
 	runtime.GOMAXPROCS(cfg.Common.MaxCPU)
 
 	if cfg.Common.MemoryReturnInterval > 0 {

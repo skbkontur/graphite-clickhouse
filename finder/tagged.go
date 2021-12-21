@@ -14,7 +14,7 @@ import (
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/pkg/where"
 
-	"github.com/msaf1980/go-stringutils"
+	stringutils "github.com/msaf1980/go-stringutils"
 )
 
 type TaggedTermOp int
@@ -188,19 +188,21 @@ func TaggedTermWhereN(term *TaggedTerm) (string, error) {
 }
 
 func setCost(term *TaggedTerm, tagCosts *config.TaggedCosts) {
+	tagCosts.RLock()
 	if costs, ok := tagCosts.Costs[term.Key]; ok {
 		if v, ok := costs.Values[term.Value]; ok {
 			term.Cost = v
 		} else if term.Op == TaggedTermEq && !term.HasWildcard {
 			term.Cost = costs.Default
 		} else {
-			term.Cost = costs.Wildcard
+			term.Cost = costs.Total
 		}
 	} else if term.Op == TaggedTermEq && !term.HasWildcard {
 		term.Cost = tagCosts.Default
 	} else {
-		term.Cost = tagCosts.Wildcard
+		term.Cost = tagCosts.Total
 	}
+	tagCosts.RUnlock()
 }
 
 func ParseTaggedConditions(conditions []string, taggedCosts *config.TaggedCosts) ([]TaggedTerm, error) {

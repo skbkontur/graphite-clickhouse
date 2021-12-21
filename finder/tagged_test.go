@@ -126,14 +126,14 @@ func TestParseSeriesByTagWithCosts(t *testing.T) {
 		Default:  2,
 		Wildcard: 500,
 		Costs: map[string]*config.Costs{
-			"name":        {Default: 1, Wildcard: 100},
-			"environment": {Default: 100, Wildcard: 100},
-			"dc":          {Default: 60, Wildcard: 100},
-			"project":     {Default: 50, Wildcard: 50},
+			"name":        {Default: 1, Total: 100},
+			"environment": {Default: 100, Total: 100},
+			"dc":          {Default: 60, Total: 100},
+			"project":     {Default: 50, Total: 50},
 			"key":         {Values: map[string]int{"value2": 70, "value3": -1, "val*4": -1, "^val.*4$": -1}},
 		},
 	}
-	if err := config.CheckTaggedCosts(taggedCosts); err != nil {
+	if err := taggedCosts.Check(); err != nil {
 		t.Fatal(err)
 	}
 

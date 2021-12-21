@@ -94,33 +94,33 @@ Depends on it for having a proper retention and aggregation you must additionall
 Only one tag used as filter for index field Tag1, see graphite_tagged table [structure](https://github.com/lomik/carbon-clickhouse#clickhouse-configuration)
 
 So, if the first tag in filter is costly (poor selectivity), like environment (with several possible values), query perfomance will be degraded.
-Tune this with `tagged-costs` options (costs in range 1-1000 or -1, lowest is prefered):
+Tune this with `tagged-costs` options (costs in range 1-1000000 or -1, lowest is prefered):
 
 `
 tagged-costs = {
-  default = 50,
-  wildcard = 600,
+  default = 100,
+  total = 6000,
   costs = {
     "environment" = {
-      default = 100
+      default = 2000
     },
     "team" = {
-      default = 95
+      default = 1500
     },
     "proj" = {
-      default = 90
+      default = 1000
     },
     "project" = {
-      default = 90
+      default = 1000
     },
     "subproject" = {
       values = {
-        "HighCost" = 85,
-        "LowCost" = 40
+        "HighCost" = 8500,
+        "LowCost" = 50
       }
     },
     "aggregate" = {
-      default = 95
+      default = 9500
     },
     "com.docker.stack.namespace" = {
       default = -1
