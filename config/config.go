@@ -410,6 +410,10 @@ func Unmarshal(body []byte) (*Config, error) {
 	}
 
 	if cfg.ClickHouse.TaggedCosts != nil {
+		if len(cfg.ClickHouse.TaggedCosts.URL) == 0 {
+			cfg.ClickHouse.TaggedCosts.URL = cfg.ClickHouse.URL
+		}
+
 		err = cfg.ClickHouse.TaggedCosts.Check()
 		if err != nil {
 			return nil, err

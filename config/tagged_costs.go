@@ -24,6 +24,7 @@ type Costs struct {
 }
 
 type TaggedCosts struct {
+	URL       string            `toml:"url" json:"url" comment:"see https://clickhouse.tech/docs/en/interfaces/http (if not set, url  from clickhouse section is used)"`
 	StoreFile string            `toml:"store" json:"store" comment:"save loaded costs"`
 	AutoLoad  time.Duration     `toml:"auto-load" json:"auto-load" comment:"periodic auto load costs from database"`
 	Costs     map[string]*Costs `toml:"costs" json:"costs" commented:"true" comment:"tune cost for tags values (with  or without wildcards or regex"`
@@ -87,7 +88,7 @@ func (t *TaggedCosts) Check() error {
 	return nil
 }
 
-func (t *TaggedCosts) Update(addr, table string, taggedAutocompleDays int) error {
+func (t *TaggedCosts) Update(table string, taggedAutocompleDays int) error {
 	t.updated = false
 
 	var db string
@@ -106,7 +107,7 @@ func (t *TaggedCosts) Update(addr, table string, taggedAutocompleDays int) error
 
 	body, err := clickhouse.Query(
 		scope.New(context.Background()).WithLogger(zapwriter.Logger("tagged_cost")).WithTable("graphite_tags"),
-		addr,
+		t.URL,
 		query,
 		clickhouse.Options{Timeout: 10 * time.Second, ConnectTimeout: 10 * time.Second},
 		nil,
@@ -214,7 +215,7 @@ func saveCosts(costs map[string]*Costs, fileName string) error {
 	return ioutil.WriteFile(fileName, body, 0644)
 }
 
-func (t *TaggedCosts) Updater(addr, table string, taggedAutocompleDays int) {
+func (t *TaggedCosts) Updater(table string, taggedAutocompleDays int) {
 	for {
 		// If update success
 		if t.updated {
@@ -224,7 +225,7 @@ func (t *TaggedCosts) Updater(addr, table string, taggedAutocompleDays int) {
 		}
 
 		start := time.Now()
-		if err := t.Update(addr, table, taggedAutocompleDays); err != nil {
+		if err := t.Update(table, taggedAutocompleDays); err != nil {
 			zapwriter.Logger("tagged_costs").Error("unable to load", zap.Error(err), zap.Duration("time", time.Since(start)))
 		} else {
 			zapwriter.Logger("tagged_costs").Info("load", zap.Duration("time", time.Since(start)))
