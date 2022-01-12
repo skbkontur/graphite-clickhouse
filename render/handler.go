@@ -3,14 +3,18 @@ package render
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/go-graphite/carbonapi/pkg/parser"
 	"github.com/lomik/graphite-clickhouse/config"
 	"github.com/lomik/graphite-clickhouse/finder"
 	"github.com/lomik/graphite-clickhouse/helper/clickhouse"
+	"github.com/lomik/graphite-clickhouse/helper/utils"
 	"github.com/lomik/graphite-clickhouse/pkg/alias"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/render/data"
@@ -29,6 +33,19 @@ func NewHandler(config *config.Config) *Handler {
 	}
 
 	return h
+}
+
+func TargetKey(fromAndUntil string, ts int64, target string) string {
+	return fromAndUntil + ";ts=" + strconv.FormatInt(ts, 10) + ";" + target
+}
+
+func getCacheTimeout(now time.Time, from, until int64, cacheConfig *config.CacheConfig) int32 {
+	duration := time.Second * time.Duration(until-from)
+	if duration <= cacheConfig.ShortDuration && now.Unix()-until <= 61 {
+		// short cache ttl
+		return cacheConfig.ShortTimeoutSec
+	}
+	return cacheConfig.DefaultTimeoutSec
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,15 +84,59 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: move to a function
 	var wg sync.WaitGroup
 	var lock sync.RWMutex
+	var cachedFind bool
 	errors := make([]error, 0, len(fetchRequests))
+	useCache := h.config.Common.FindCache != nil && !parser.TruthyBool(r.FormValue("noCache"))
+	now := time.Now()
 	var metricsLen int
 	for tf, target := range fetchRequests {
 		for _, expr := range target.List {
 			wg.Add(1)
 			go func(tf data.TimeFrame, target string, am *alias.Map) {
 				defer wg.Done()
+
+				var fndResult finder.Result
+				var err error
+
+				var cacheTimeout int32
+				var key string
+				var ts int64
+
+				if useCache {
+					var fromAndUntil string
+					cacheTimeout = getCacheTimeout(now, tf.From, tf.Until, &h.config.Common.FindCacheConfig)
+					if cacheTimeout > 0 {
+						ts = utils.TimestampTruncate(time.Now().Unix(), time.Duration(cacheTimeout)*time.Second)
+						fromAndUntil = time.Unix(tf.From, 0).Format("2006-01-02") + ";" + time.Unix(tf.Until, 0).Format("2006-01-02")
+						key = TargetKey(fromAndUntil, ts, target)
+						body, err := h.config.Common.FindCache.Get(key)
+						if err == nil {
+							cachedFind = true
+							if len(body) > 0 {
+								// ApiMetrics.RequestCacheHits.Add(1)
+								var f finder.Finder
+								if !strings.Contains(target, "seriesByTag(") {
+									f = finder.NewCachedIndex(body)
+								} else {
+									f = finder.NewCachedTags(body)
+								}
+
+								am.MergeTarget(f.(finder.Result), target, false)
+								lock.Lock()
+								metricsLen += am.Len()
+								lock.Unlock()
+
+								logger.Info("finder", zap.String("get_cache", target), zap.Time("timestamp_cached", time.Unix(ts, 0)),
+									zap.Int("metrics", am.Len()), zap.Bool("find_cached", true),
+									zap.Int32("ttl", cacheTimeout))
+							}
+							return
+						}
+					}
+				}
+
 				// Search in small index table first
-				fndResult, err := finder.Find(h.config, r.Context(), target, tf.From, tf.Until)
+				fndResult, err = finder.Find(h.config, r.Context(), target, tf.From, tf.Until)
 				if err != nil {
 					logger.Error("find", zap.Error(err))
 					lock.Lock()
@@ -84,7 +145,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				am.MergeTarget(fndResult, target)
+				body := am.MergeTarget(fndResult, target, useCache)
+				if useCache && cacheTimeout > 0 {
+					h.config.Common.FindCache.Set(key, body, cacheTimeout)
+					logger.Info("finder", zap.String("set_cache", target), zap.Time("timestamp_cached", time.Unix(ts, 0)),
+						zap.Int("metrics", am.Len()), zap.Bool("find_cached", false),
+						zap.Int32("ttl", cacheTimeout))
+				}
 				lock.Lock()
 				metricsLen += am.Len()
 				lock.Unlock()
@@ -97,7 +164,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("finder", zap.Int("metrics", metricsLen))
+	logger.Info("finder", zap.Int("metrics", metricsLen), zap.Bool("find_cached", cachedFind))
+
+	if cachedFind {
+		w.Header().Set("X-Cached-Find", "true")
+	}
 
 	if metricsLen == 0 {
 		formatter.Reply(w, r, data.EmptyResponse())
