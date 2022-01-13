@@ -16,6 +16,8 @@ import (
 	"github.com/lomik/graphite-clickhouse/helper/utils"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/pkg/where"
+	"github.com/msaf1980/go-stringutils"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
@@ -110,6 +112,10 @@ func (h *Handler) ServeTags(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	now := time.Now()
+	fromDate := now.AddDate(0, 0, -h.config.ClickHouse.TaggedAutocompleDays).Format("2006-01-02")
+	untilDate := now.Format("2006-01-02")
+
 	wr, pw, usedTags, err := h.requestExpr(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -131,8 +137,7 @@ func (h *Handler) ServeTags(w http.ResponseWriter, r *http.Request) {
 
 	queryLimit := limit + len(usedTags)
 
-	fromDate := time.Now().AddDate(0, 0, -h.config.ClickHouse.TaggedAutocompleDays)
-	wr.Andf("Date >= '%s'", fromDate.Format("2006-01-02"))
+	wr.Andf("Date >= '%s' AND Date <= '%s'", fromDate, untilDate)
 
 	sql := fmt.Sprintf("SELECT %s FROM %s %s %s GROUP BY value ORDER BY value LIMIT %d",
 		valueSQL,
@@ -199,28 +204,30 @@ func (h *Handler) ServeTags(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func taggedKey(truncateSec int32, fromDate, untilDate string, tag string, exprs []string) string {
+func taggedKey(truncateSec int32, fromDate, untilDate string, tag string, exprs []string) (string, string) {
 	ts := utils.TimestampTruncate(time.Now().Unix(), time.Duration(truncateSec)*time.Second)
 	var sb strings.Builder
 	sb.Grow(128)
 	sb.WriteString(fromDate)
 	sb.WriteString(";")
 	sb.WriteString(untilDate)
-	sb.WriteString(";tag=")
+	tagStart := sb.Len() + 2
+	sb.WriteString("; tag=")
 	sb.WriteString(tag)
 	for _, expr := range exprs {
-		sb.WriteString(";expr=")
-		sb.WriteString(expr)
-
+		sb.WriteString(" ; ")
+		sb.WriteString(strings.Replace(expr, " = ", "=", 1))
 	}
+	exprEnd := sb.Len()
 	sb.WriteString(";ts=")
 	sb.WriteString(strconv.FormatInt(ts, 10))
 
-	return sb.String()
+	s := sb.String()
+	return s, s[tagStart:exprEnd]
 }
 
 func (h *Handler) ServeValues(w http.ResponseWriter, r *http.Request) {
-	// logger := log.FromContext(r.Context())
+	logger := scope.LoggerWithHeaders(r.Context(), r, h.config.Common.HeadersToLog)
 
 	var err error
 
@@ -247,21 +254,24 @@ func (h *Handler) ServeValues(w http.ResponseWriter, r *http.Request) {
 	untilDate := now.Format("2006-01-02")
 
 	var key string
+	var expr string
 	var body []byte
+	var findCache bool
 
 	useCache := h.config.Common.FindCache != nil && h.config.Common.FindCacheConfig.FindTimeoutSec > 0 && !parser.TruthyBool(r.FormValue("noCache"))
 	if useCache {
 		// logger = logger.With(zap.String("use_cache", "true"))
-		key = taggedKey(h.config.Common.FindCacheConfig.FindTimeoutSec, fromDate, untilDate, r.FormValue("tag"), r.Form["expr"])
+		key, expr = taggedKey(h.config.Common.FindCacheConfig.FindTimeoutSec, fromDate, untilDate, r.FormValue("tag"), r.Form["expr"])
 		body, err = h.config.Common.FindCache.Get(key)
 		if err == nil {
 			// ApiMetrics.RequestCacheHits.Add(1)
+			findCache = true
 			w.Header().Set("X-Cached-Find", "true")
 		}
 		// ApiMetrics.RequestCacheMisses.Add(1)
 	}
 
-	if len(body) == 0 {
+	if !findCache {
 		wr, pw, usedTags, err := h.requestExpr(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -277,7 +287,7 @@ func (h *Handler) ServeValues(w http.ResponseWriter, r *http.Request) {
 			wr.And(where.HasPrefix("arrayJoin(Tags)", tag+"="+valuePrefix))
 		}
 
-		wr.Andf("Date >= '%s'", fromDate)
+		wr.Andf("Date >= '%s' AND Date <= '%s'", fromDate, untilDate)
 
 		sql := fmt.Sprintf("SELECT %s FROM %s %s %s GROUP BY value ORDER BY value LIMIT %d",
 			valueSQL,
@@ -307,9 +317,24 @@ func (h *Handler) ServeValues(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows := strings.Split(string(body), "\n")
-	if len(rows) > 0 && rows[len(rows)-1] == "" {
-		rows = rows[:len(rows)-1]
+	var rows []string
+	if len(body) > 0 {
+		rows = strings.Split(stringutils.UnsafeString(body), "\n")
+		if len(rows) > 0 && rows[len(rows)-1] == "" {
+			rows = rows[:len(rows)-1]
+		}
+	}
+
+	if useCache {
+		if findCache {
+			logger.Info("finder", zap.String("get_cache", expr),
+				zap.Int("metrics", len(rows)), zap.Bool("find_cached", true),
+				zap.Int32("ttl", h.config.Common.FindCacheConfig.FindTimeoutSec))
+		} else {
+			logger.Info("finder", zap.String("set_cache", expr),
+				zap.Int("metrics", len(rows)), zap.Bool("find_cached", false),
+				zap.Int32("ttl", h.config.Common.FindCacheConfig.FindTimeoutSec))
+		}
 	}
 
 	b, err := json.Marshal(rows)

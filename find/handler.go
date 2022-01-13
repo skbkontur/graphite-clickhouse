@@ -13,6 +13,7 @@ import (
 	"github.com/lomik/graphite-clickhouse/helper/clickhouse"
 	"github.com/lomik/graphite-clickhouse/helper/utils"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
@@ -83,6 +84,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// ApiMetrics.RequestCacheHits.Add(1)
 			w.Header().Set("X-Cached-Find", "true")
 			f := NewCached(h.config, body)
+			logger.Info("finder", zap.String("get_cache", query),
+				zap.Int("metrics", len(f.result.List())), zap.Bool("find_cached", true),
+				zap.Int32("ttl", h.config.Common.FindCacheConfig.FindTimeoutSec))
+
 			h.Reply(w, r, f)
 			return
 		}
@@ -98,6 +103,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if useCache {
 		if body, err := f.result.Bytes(); err == nil {
 			h.config.Common.FindCache.Set(key, body, h.config.Common.FindCacheConfig.FindTimeoutSec)
+			logger.Info("finder", zap.String("set_cache", query),
+				zap.Int("metrics", len(f.result.List())), zap.Bool("find_cached", false),
+				zap.Int32("ttl", h.config.Common.FindCacheConfig.FindTimeoutSec))
 		}
 	}
 
