@@ -129,6 +129,9 @@ func (q *query) getDataPoints(ctx context.Context, cond *conditions) error {
 	cond.prepareLookup()
 	cond.setStep(q.cStep)
 	cond.setFromUntil()
+	if cond.from <= 0 && cond.until <= 0 {
+		return fmt.Errorf("cond.setFromUntil() error: From: %d, Until: %d, step: %d produce from: %d, until: %d", cond.From, cond.Until, cond.step, cond.from, cond.until)
+	}
 	cond.setPrewhere()
 	cond.setWhere()
 
