@@ -120,6 +120,7 @@ func (q *query) getDataPoints(ctx context.Context, cond *conditions) error {
 
 	cond.prepareMetricsLists()
 	if len(cond.metricsRequested) == 0 {
+		q.cStep.doneTarget()
 		return nil
 	}
 
@@ -306,8 +307,9 @@ func (c *conditions) setStep(cStep *commonStep) {
 		step = cStep.calculateUnsafe(step, int64(s))
 	}
 	cStep.calculate(step)
-	step = dry.Max(cStep.getResult(), dry.Ceil(c.Until-c.From, c.MaxDataPoints))
-	c.step = dry.CeilToMultiplier(step, cStep.getResult())
+	rStep := cStep.getResult()
+	step = dry.Max(rStep, dry.Ceil(c.Until-c.From, c.MaxDataPoints))
+	c.step = dry.CeilToMultiplier(step, rStep)
 	return
 }
 

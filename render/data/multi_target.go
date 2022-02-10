@@ -89,6 +89,7 @@ func (m *MultiTarget) Fetch(ctx context.Context, cfg *config.Config, chContext s
 			errors = append(errors, err)
 			lock.Unlock()
 			logger.Error("data tables is not specified", zap.Error(err))
+			query.cStep.doneTarget()
 			return EmptyResponse(), err
 		}
 		wg.Add(1)
