@@ -90,9 +90,10 @@ func HandleError(w http.ResponseWriter, err error) {
 			http.Error(w, "Storage configuration error", http.StatusServiceUnavailable)
 		}
 	}
-	if errors.Is(err, context.Canceled) {
-		http.Error(w, "Storage read context canceled", http.StatusGatewayTimeout)
-	}
+	// DISABLED for prevent retry on balancers: check for context.Canceled - some strange errors when limit is reached
+	// if errors.Is(err, context.Canceled) {
+	// 	http.Error(w, "Storage read context canceled", http.StatusGatewayTimeout)
+	// }
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 

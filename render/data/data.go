@@ -320,6 +320,8 @@ func (d *data) parseResponse(ctx context.Context, bodyReader io.ReadCloser, cond
 		if ok {
 			// format full error string
 			dataErr.PrependDescription(string(rowStart))
+		} else {
+			err = clickhouse.NewErrDataParse(err.Error(), string(rowStart))
 		}
 		bodyReader.Close()
 		return err
