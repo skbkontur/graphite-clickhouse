@@ -55,10 +55,6 @@ var ErrUvarintOverflow = errors.New("ReadUvarint: varint overflows a 64-bit inte
 var ErrClickHouseResponse = errors.New("Malformed response from clickhouse")
 
 func HandleError(w http.ResponseWriter, err error) {
-	if errors.Is(err, context.Canceled) {
-		http.Error(w, "Storage read context canceled", http.StatusGatewayTimeout)
-		return
-	}
 	netErr, ok := err.(net.Error)
 	if ok {
 		if netErr.Timeout() {
@@ -93,10 +89,11 @@ func HandleError(w http.ResponseWriter, err error) {
 			// clickhouse response status 500: Code: 170, e.displayText() = DB::Exception: Requested cluster 'cluster' not found
 			http.Error(w, "Storage configuration error", http.StatusServiceUnavailable)
 		}
-	} else {
-		//logger.Debug("query", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	if errors.Is(err, context.Canceled) {
+		http.Error(w, "Storage read context canceled", http.StatusGatewayTimeout)
+	}
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 type Options struct {
