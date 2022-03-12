@@ -14,9 +14,21 @@ import (
 	toml "github.com/pelletier/go-toml"
 	"go.uber.org/zap"
 
+	"github.com/lomik/graphite-clickhouse/cache"
 	"github.com/lomik/graphite-clickhouse/helper/rollup"
 	"github.com/lomik/zapwriter"
 )
+
+// Cache config
+type CacheConfig struct {
+	Type              string        `toml:"type" json:"type" comment:"cache type"`
+	Size              int           `toml:"size_mb" json:"size_mb" comment:"cache size"`
+	MemcachedServers  []string      `toml:"memcached_servers" json:"memcached_servers" comment:"memcached servers"`
+	DefaultTimeoutSec int32         `toml:"default_timeout" json:"default_timeout" comment:"default cache ttl"`
+	ShortTimeoutSec   int32         `toml:"short_timeout" json:"short_timeout" comment:"short-time cache ttl"`
+	FindTimeoutSec    int32         `toml:"find_timeout" json:"find_timeout" comment:"finder/tags autocompleter cache ttl"`
+	ShortDuration     time.Duration `toml:"short_duration" json:"short_duration" comment:"maximum diration, used with short_timeout"`
+}
 
 // Common config
 type Common struct {
@@ -32,6 +44,9 @@ type Common struct {
 	Blacklist              []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
 	MemoryReturnInterval   time.Duration    `toml:"memory-return-interval" json:"memory-return-interval" comment:"daemon will return the freed memory to the OS when it>0"`
 	HeadersToLog           []string         `toml:"headers-to-log" json:"headers-to-log" comment:"additional request headers to log"`
+	FindCacheConfig        CacheConfig      `toml:"find-cache" json:"find-cache" comment:"find cache config"`
+	FindCache              cache.BytesCache `toml:"-" json:"-"`
+	TaggedCache            cache.BytesCache `toml:"-" json:"-"`
 }
 
 // IndexReverseRule contains rules to use direct or reversed request to index table
@@ -190,6 +205,12 @@ func New() *Config {
 			MaxMetricsInFindAnswer: 0,
 			MaxMetricsPerTarget:    15000, // This is arbitrary value to protect CH from overload
 			MemoryReturnInterval:   0,
+			FindCacheConfig: CacheConfig{
+				Type:              "null",
+				DefaultTimeoutSec: 0,
+				ShortTimeoutSec:   0,
+				FindTimeoutSec:    0,
+			},
 		},
 		ClickHouse: ClickHouse{
 			URL:                  "http://localhost:8123?cancel_http_readonly_queries_on_client_close=1",
@@ -256,10 +277,8 @@ func newLoggingConfig() zapwriter.Config {
 	return cfg
 }
 
-// PrintDefaultConfig prints the default config with some additions to be useful
-func PrintDefaultConfig() error {
+func DefaultConfig() (*Config, error) {
 	cfg := New()
-	buf := new(bytes.Buffer)
 
 	if cfg.Logging == nil {
 		cfg.Logging = make([]zapwriter.Config, 0)
@@ -286,8 +305,19 @@ func PrintDefaultConfig() error {
 		}
 		err := cfg.ClickHouse.IndexReverses.Compile()
 		if err != nil {
-			return err
+			return nil, err
 		}
+	}
+
+	return cfg, nil
+}
+
+// PrintDefaultConfig prints the default config with some additions to be useful
+func PrintDefaultConfig() error {
+	buf := new(bytes.Buffer)
+	cfg, err := DefaultConfig()
+	if err != nil {
+		return err
 	}
 
 	encoder := toml.NewEncoder(buf).Indentation(" ").Order(toml.OrderPreserve).CompactComments(true)
@@ -367,6 +397,14 @@ func Unmarshal(body []byte) (*Config, error) {
 
 	err = cfg.ClickHouse.IndexReverses.Compile()
 	if err != nil {
+		return nil, err
+	}
+
+	if cfg.Common.FindCache, err = CreateCache("index", &cfg.Common.FindCacheConfig); err != nil {
+		return nil, err
+	}
+
+	if cfg.Common.FindCache, err = CreateCache("index", &cfg.Common.FindCacheConfig); err != nil {
 		return nil, err
 	}
 
@@ -485,5 +523,31 @@ func (c *Config) ProcessDataTables() (err error) {
 func checkDeprecations(cfg *Config, d map[string]error) {
 	if cfg.ClickHouse.DataTableLegacy != "" {
 		d["data-table"] = fmt.Errorf("data-table parameter in [clickhouse] is deprecated; use [[data-table]]")
+	}
+}
+
+func CreateCache(cacheName string, cacheConfig *CacheConfig) (cache.BytesCache, error) {
+	if cacheConfig.DefaultTimeoutSec <= 0 && cacheConfig.ShortTimeoutSec <= 0 && cacheConfig.FindTimeoutSec <= 0 {
+		return nil, nil
+	}
+	if cacheConfig.DefaultTimeoutSec < cacheConfig.ShortTimeoutSec {
+		cacheConfig.DefaultTimeoutSec = cacheConfig.ShortTimeoutSec
+	}
+	if cacheConfig.ShortDuration == 0 {
+		cacheConfig.ShortDuration = 3 * time.Hour
+	}
+	switch cacheConfig.Type {
+	case "memcache":
+		if len(cacheConfig.MemcachedServers) == 0 {
+			return nil, fmt.Errorf(cacheName + ": memcache cache requested but no memcache servers provided")
+		}
+		return cache.NewMemcached("gch-"+cacheName, cacheConfig.MemcachedServers...), nil
+	case "mem":
+		return cache.NewExpireCache(uint64(cacheConfig.Size * 1024 * 1024)), nil
+	case "null":
+		// defaults
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("%s: unknown cache type '%s', known_cache_types 'null', 'mem', 'memcache'", cacheName, cacheConfig.Type)
 	}
 }
