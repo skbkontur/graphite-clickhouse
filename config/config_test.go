@@ -332,8 +332,15 @@ sample-thereafter = 12
 
 	// ClickHouse
 	expected.ClickHouse = ClickHouse{
-		URL:                  "http://somehost:8123",
-		DataTimeout:          64000000000,
+		URL:         "http://somehost:8123",
+		DataTimeout: 64000000000,
+		QueryParams: []QueryParam{
+			{
+				Duration:    0,
+				URL:         "http://somehost:8123",
+				DataTimeout: 64000000000,
+			},
+		},
 		IndexTable:           "graphite_index",
 		IndexReverse:         "direct",
 		IndexReverses:        make(IndexReverses, 2),

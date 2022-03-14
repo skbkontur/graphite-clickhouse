@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	v3pb "github.com/go-graphite/protocol/carbonapi_v3_pb"
 	"github.com/lomik/graphite-clickhouse/config"
@@ -58,6 +59,26 @@ func (m *MultiTarget) checkMetricsLimitExceeded(num int) error {
 	return nil
 }
 
+func getDataTimeout(cfg *config.Config, m *MultiTarget) time.Duration {
+	dataTimeout := cfg.ClickHouse.DataTimeout
+	if len(cfg.ClickHouse.QueryParams) > 1 {
+		var maxDuration time.Duration
+		for tf, _ := range *m {
+			duration := time.Second * time.Duration(tf.Until-tf.From)
+			if duration >= maxDuration {
+				maxDuration = duration
+			}
+		}
+
+		i := config.BinarySearchQueryParam(cfg.ClickHouse.QueryParams, maxDuration)
+		if i >= 0 {
+			return cfg.ClickHouse.QueryParams[i].DataTimeout
+		}
+	}
+
+	return dataTimeout
+}
+
 // Fetch fetches the parsed ClickHouse data returns CHResponses
 func (m *MultiTarget) Fetch(ctx context.Context, cfg *config.Config, chContext string) (CHResponses, error) {
 	var lock sync.RWMutex
@@ -71,7 +92,9 @@ func (m *MultiTarget) Fetch(ctx context.Context, cfg *config.Config, chContext s
 		return nil, err
 	}
 
-	ctxTimeout, cancel := context.WithTimeout(ctx, cfg.ClickHouse.DataTimeout)
+	dataTimeout := getDataTimeout(cfg, m)
+
+	ctxTimeout, cancel := context.WithTimeout(ctx, dataTimeout)
 	defer cancel()
 
 	errors := make([]error, 0, len(*m))

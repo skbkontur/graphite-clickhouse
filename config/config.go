@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -82,10 +83,41 @@ var IndexReverse = map[string]uint8{
 // IndexReverseNames contains valid names for index-reverse setting
 var IndexReverseNames = []string{"auto", "direct", "reversed"}
 
+type QueryParam struct {
+	Duration    time.Duration `toml:"duration" json:"duration" comment:"minimal duration (beetween from/until) for select query params"`
+	URL         string        `toml:"url" json:"url" comment:"url for queries with durations greater or equal than "`
+	DataTimeout time.Duration `toml:"data-timeout" json:"data-timeout" comment:"total timeout to fetch data"`
+}
+
+func binarySearchQueryParam(a []QueryParam, duration time.Duration, start, end int) int {
+	length := end - start
+	if length <= 0 {
+		return -1 // not found
+	}
+
+	var result int
+	mid := start + length/2
+	if a[mid].Duration > duration {
+		result = binarySearchQueryParam(a, duration, start, mid)
+	} else {
+		if result = binarySearchQueryParam(a, duration, mid+1, end); result == -1 {
+			result = mid
+		}
+	}
+
+	return result
+}
+
+// search on sorted slice
+func BinarySearchQueryParam(a []QueryParam, duration time.Duration) int {
+	return binarySearchQueryParam(a, duration, 0, len(a))
+}
+
 // ClickHouse config
 type ClickHouse struct {
-	URL                  string            `toml:"url" json:"url" comment:"see https://clickhouse.tech/docs/en/interfaces/http"`
-	DataTimeout          time.Duration     `toml:"data-timeout" json:"data-timeout" comment:"total timeout to fetch data"`
+	URL                  string            `toml:"url" json:"url" comment:"default url, see https://clickhouse.tech/docs/en/interfaces/http. Can be overwritten with query-params"`
+	DataTimeout          time.Duration     `toml:"data-timeout" json:"data-timeout" comment:"default total timeout to fetch data, can be overwritten with query-params"`
+	QueryParams          []QueryParam      `toml:"query-params" json:"query-params" comment:"customized query params (url, data timeout) for durations greater or equal"`
 	IndexTable           string            `toml:"index-table" json:"index-table" comment:"see doc/index-table.md"`
 	IndexUseDaily        bool              `toml:"index-use-daily" json:"index-use-daily"`
 	IndexReverse         string            `toml:"index-reverse" json:"index-reverse" comment:"see doc/config.md"`
@@ -369,6 +401,28 @@ func Unmarshal(body []byte) (*Config, error) {
 	if cfg.Logging == nil {
 		cfg.Logging = make([]zapwriter.Config, 0)
 	}
+
+	sort.SliceStable(cfg.ClickHouse.QueryParams, func(i, j int) bool {
+		return cfg.ClickHouse.QueryParams[i].Duration > cfg.ClickHouse.QueryParams[j].Duration
+	})
+
+	for i := range cfg.ClickHouse.QueryParams {
+		if cfg.ClickHouse.QueryParams[i].Duration == 0 {
+			return nil, fmt.Errorf("query duration param not set for: %+v", cfg.ClickHouse.QueryParams[i])
+		}
+		if cfg.ClickHouse.QueryParams[i].DataTimeout == 0 {
+			return nil, fmt.Errorf("query data-timeout param not set for: %+v", cfg.ClickHouse.QueryParams[i])
+		}
+		if cfg.ClickHouse.QueryParams[i].URL == "" {
+			// reuse default url
+			cfg.ClickHouse.QueryParams[i].URL = cfg.ClickHouse.URL
+		}
+	}
+
+	cfg.ClickHouse.QueryParams = append(
+		[]QueryParam{{URL: cfg.ClickHouse.URL, DataTimeout: cfg.ClickHouse.DataTimeout}},
+		cfg.ClickHouse.QueryParams...,
+	)
 
 	if len(cfg.Logging) == 0 {
 		cfg.Logging = append(cfg.Logging, newLoggingConfig())
