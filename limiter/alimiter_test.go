@@ -69,9 +69,9 @@ func TestNewALimiter(t *testing.T) {
 	cancel()
 
 	// load_avg 0.5
-	load_avg.Store(0.5)
+	load_avg.Store(0.7)
 	k := getWeighted(n, c)
-	require.Equal(t, n/2, k)
+	require.Equal(t, n*7/10, k)
 
 	time.Sleep(checkDelay * 2)
 
@@ -96,13 +96,13 @@ func TestNewALimiter(t *testing.T) {
 	time.Sleep(checkDelay * 2)
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond*10)
-	for i = 0; i < c-k; i++ {
+	for i = 0; i < c-n; i++ {
 		require.NoError(t, limiter.Enter(ctx, "render"), "try to lock with load_avg = 1 [%d]", i)
 	}
 
 	require.Error(t, limiter.Enter(ctx, "render"))
 
-	for i = 0; i < k; i++ {
+	for i = 0; i < c-n; i++ {
 		limiter.Leave(ctx, "render")
 	}
 

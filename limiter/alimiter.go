@@ -18,7 +18,7 @@ func getWeighted(n, max int) int {
 		return 0
 	}
 	loadAvg := load_avg.Load()
-	if loadAvg < 1 {
+	if loadAvg < 0.6 {
 		return 0
 	}
 

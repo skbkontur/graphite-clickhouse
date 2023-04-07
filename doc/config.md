@@ -190,6 +190,16 @@ Only one tag used as filter for index field Tag1, see graphite_tagged table [str
  memory-return-interval = "0s"
  # additional request headers to log
  headers-to-log = []
+ # service_discovery base weight (on 0 load)
+ base_weight = 0
+ # service_discovery type
+ service_discovery_type = 0
+ # service_discovery address (consul)
+ service_discovery = ""
+ # service_discovery namespace (graphite by default)
+ service_discovery_ns = ""
+ # service_discovery datacenters (first - is primary, in other register as backup)
+ service_discovery_ds = []
 
  # find/tags cache config
  [common.find-cache]

@@ -21,12 +21,13 @@ import (
 	"github.com/lomik/graphite-clickhouse/find"
 	"github.com/lomik/graphite-clickhouse/healthcheck"
 	"github.com/lomik/graphite-clickhouse/index"
-	"github.com/lomik/graphite-clickhouse/load_avg"
 	"github.com/lomik/graphite-clickhouse/logs"
 	"github.com/lomik/graphite-clickhouse/metrics"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/prometheus"
 	"github.com/lomik/graphite-clickhouse/render"
+	"github.com/lomik/graphite-clickhouse/sd"
+	"github.com/lomik/graphite-clickhouse/sd/nginx"
 	"github.com/lomik/graphite-clickhouse/tagger"
 )
 
@@ -93,6 +94,8 @@ func main() {
 	buildTags := flag.Bool("tags", false, "Build tags table")
 	pprof := flag.String("pprof", "", "Additional pprof listen addr for non-server modes (tagger, etc..), overrides pprof-listen from common ")
 
+	sdList := flag.Bool("sd-list", false, "List registered nodes in SD")
+
 	printVersion := flag.Bool("version", false, "Print version")
 	verbose := flag.Bool("verbose", false, "Verbose (print config on startup)")
 
@@ -120,6 +123,27 @@ func main() {
 		return
 	}
 
+	if *sdList {
+		if cfg.Common.SD != "" && cfg.NeedLoadAvgColect() {
+			var sd sd.SD
+			logger := zapwriter.Default()
+			switch cfg.Common.SDType {
+			case config.SDNginx:
+				sd = nginx.New(cfg.Common.SD, cfg.Common.SDNamespace, "", logger)
+			default:
+				panic("serive discovery type not registered")
+			}
+			if nodes, err := sd.Nodes(); err == nil {
+				for _, node := range nodes {
+					fmt.Printf("%s: %s\n", node.Key, node.Value)
+				}
+			} else {
+				log.Fatal(err)
+			}
+		}
+		return
+	}
+
 	if err = zapwriter.ApplyConfig(cfg.Logging); err != nil {
 		log.Fatal(err)
 	}
@@ -128,6 +152,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	logger := localManager.Logger("start")
 	if *verbose {
 		logger.Info("starting graphite-clickhouse",
@@ -215,15 +240,8 @@ func main() {
 	}
 
 	if cfg.NeedLoadAvgColect() {
-		go func() {
-			for {
-				load1, err := load_avg.Normalized()
-				if err == nil {
-					load_avg.Store(load1)
-				}
-				time.Sleep(time.Second * 10)
-			}
-		}()
+		sdLogger := localManager.Logger("service discovery")
+		go sd.Register(cfg, sdLogger)
 	}
 
 	log.Fatal(http.ListenAndServe(cfg.Common.Listen, mux))

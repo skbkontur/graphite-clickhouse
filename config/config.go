@@ -26,6 +26,40 @@ import (
 	"github.com/lomik/zapwriter"
 )
 
+type SDType int
+
+const (
+	SDNginx SDType = iota // https://github.com/weibocom/nginx-upsync-module
+)
+
+var sdTypeStrings []string = []string{"nginx"}
+
+func (a *SDType) Set(value string) error {
+	switch value {
+	case "nginx":
+		*a = SDNginx
+	default:
+		return fmt.Errorf("invalid sd type %s", value)
+	}
+	return nil
+}
+
+func (a *SDType) UnmarshalText(data []byte) error {
+	return a.Set(string(data))
+}
+
+func (a *SDType) UnmarshalJSON(data []byte) error {
+	return a.Set(string(data))
+}
+
+func (a *SDType) String() string {
+	return sdTypeStrings[*a]
+}
+
+func (a *SDType) Type() string {
+	return "service_discovery_type"
+}
+
 // Cache config
 type CacheConfig struct {
 	Type                string        `toml:"type" json:"type" comment:"cache type"`
@@ -51,6 +85,11 @@ type Common struct {
 	Blacklist              []*regexp.Regexp `toml:"-" json:"-"` // compiled TargetBlacklist
 	MemoryReturnInterval   time.Duration    `toml:"memory-return-interval" json:"memory-return-interval" comment:"daemon will return the freed memory to the OS when it>0"`
 	HeadersToLog           []string         `toml:"headers-to-log" json:"headers-to-log" comment:"additional request headers to log"`
+	BaseWeight             int              `toml:"base_weight" json:"base_weight" comment:"service_discovery base weight (on 0 load)"`
+	SDType                 SDType           `toml:"service_discovery_type" json:"service_discovery_type" comment:"service_discovery type"`
+	SD                     string           `toml:"service_discovery" json:"service_discovery" comment:"service_discovery address (consul)"`
+	SDNamespace            string           `toml:"service_discovery_ns" json:"service_discovery_ns" comment:"service_discovery namespace (graphite by default)"`
+	SDDc                   []string         `toml:"service_discovery_ds" json:"service_discovery_ds" comment:"service_discovery datacenters (first - is primary, in other register as backup)"`
 
 	FindCacheConfig CacheConfig `toml:"find-cache" json:"find-cache" comment:"find/tags cache config"`
 
@@ -650,6 +689,15 @@ func Unmarshal(body []byte, noLog bool) (*Config, error) {
 
 // NeedLoadAvgColect check if load avg collect is neeeded
 func (c *Config) NeedLoadAvgColect() bool {
+	if c.Common.SD != "" {
+		if c.Common.BaseWeight <= 0 {
+			c.Common.BaseWeight = 100
+		}
+		if c.Common.SDNamespace == "" {
+			c.Common.SDNamespace = "graphite"
+		}
+		return true
+	}
 	if c.ClickHouse.RenderAdaptiveQueries > 0 {
 		return true
 	}
