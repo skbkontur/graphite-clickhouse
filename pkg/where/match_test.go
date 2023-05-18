@@ -1,6 +1,9 @@
 package where
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func Test_clearGlob(t *testing.T) {
 	type args struct {
@@ -31,20 +34,123 @@ func Test_clearGlob(t *testing.T) {
 func TestGlob(t *testing.T) {
 	field := "test"
 	tests := []struct {
-		query string
-		want  string
+		query       string
+		expandMax   int
+		expandDepth int
+		want        string
 	}{
-		{"a.{a,b}.te{s}t.b", "test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]test[.]b$')"},
-		{"a.{a,b}.te{s,t}*.b", "test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]te(s|t)([^.]*?)[.]b$')"},
-		{"a.{a,b}.test*.b", "test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]test([^.]*?)[.]b$')"},
-		{"a.[b].te{s}t.b", "test='a.b.test.b'"},
-		{"a.[ab].te{s,t}*.b", "test LIKE 'a.%' AND match(test, '^a[.][ab][.]te(s|t)([^.]*?)[.]b$')"},
+		{"a.b.test.*", -1, 0, "test LIKE 'a.b.test.%'"},
+		{"a.b.test.c?", -1, 0, "test LIKE 'a.b.test.c%' AND match(test, '^a[.]b[.]test[.]c[^.]$')"},
+		{"a.{a,b}.te{s}t.b", 0, 0, "test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]test[.]b$')"},
+		{"a.{a,b}.te{s}t.b", -1, 0, "test IN ('a.a.test.b','a.b.test.b')"},
+		{"a.{a,b}.te{s,t}*.b", 0, 0, "test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]te(s|t)([^.]*?)[.]b$')"},
+		{
+			"a.{a,b}.te{s,t}*.b", 2, 0,
+			"(test LIKE 'a.a.te%' AND match(test, '^a[.]a[.]te(s|t)([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.te%' AND match(test, '^a[.]b[.]te(s|t)([^.]*?)[.]b$'))",
+		},
+		{
+			"a.{a,b}.te{s,t}*.b", -1, 1,
+			"(test LIKE 'a.a.te%' AND match(test, '^a[.]a[.]te(s|t)([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.te%' AND match(test, '^a[.]b[.]te(s|t)([^.]*?)[.]b$'))",
+		},
+		{
+			"a.{a,b}.te{s,t}*.b", -1, 2,
+			"(test LIKE 'a.a.tes%' AND match(test, '^a[.]a[.]tes([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.a.tet%' AND match(test, '^a[.]a[.]tet([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.tes%' AND match(test, '^a[.]b[.]tes([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.tet%' AND match(test, '^a[.]b[.]tet([^.]*?)[.]b$'))",
+		},
+		{
+			"a.{a,b}.te{s,t}*.b", -1, 0,
+			"(test LIKE 'a.a.tes%' AND match(test, '^a[.]a[.]tes([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.a.tet%' AND match(test, '^a[.]a[.]tet([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.tes%' AND match(test, '^a[.]b[.]tes([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.tet%' AND match(test, '^a[.]b[.]tet([^.]*?)[.]b$'))",
+		},
+		{"a.{a,b}.test*.b", 0, 0, "test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]test([^.]*?)[.]b$')"},
+		{
+			"a.{a,b}.test*.b", -1, 0,
+			"(test LIKE 'a.a.test%' AND match(test, '^a[.]a[.]test([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.test%' AND match(test, '^a[.]b[.]test([^.]*?)[.]b$'))",
+		},
+		{"a.[b].te{s}t.b", 0, 0, "test='a.b.test.b'"},
+		{"a.[ab].te{s,t}*.b", 0, 0, "test LIKE 'a.%' AND match(test, '^a[.][ab][.]te(s|t)([^.]*?)[.]b$')"},
+		{
+			"a.[ab].te{s,t}*.b", -1, 0,
+			"(test LIKE 'a.a.tes%' AND match(test, '^a[.]a[.]tes([^.]*?)[.]b$')) " +
+				"OR (test LIKE 'a.a.tet%' AND match(test, '^a[.]a[.]tet([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.tes%' AND match(test, '^a[.]b[.]tes([^.]*?)[.]b$')) OR " +
+				"(test LIKE 'a.b.tet%' AND match(test, '^a[.]b[.]tet([^.]*?)[.]b$'))",
+		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.query, func(t *testing.T) {
-			if got := Glob(field, tt.query); got != tt.want {
-				t.Errorf("Glob() = %v, want %v", got, tt.want)
+		t.Run(fmt.Sprintf("%s [%d:%d]", tt.query, tt.expandMax, tt.expandDepth), func(t *testing.T) {
+			if got := Glob(field, tt.query, tt.expandMax, tt.expandDepth); got != tt.want {
+				t.Errorf("Glob() =\n%v\nwant\n%v", got, tt.want)
 			}
 		})
 	}
 }
+
+// func TestGlobs(t *testing.T) {
+// 	field := "test"
+// 	tests := []struct {
+// 		queries []string
+// 		want    string
+// 	}{
+// 		{
+// 			[]string{"a.{a,b}.te{s}t.b", "b.{e,d}.TE{S}T.b"},
+// 			"(test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]test[.]b$')) OR" +
+// 				" (test LIKE 'b.%' AND match(test, '^b[.](e|d)[.]TEST[.]b$'))",
+// 		},
+// 		{[]string{"a.{a,b}.te{s,t}*.b"}, "(test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]te(s|t)([^.]*?)[.]b$'))"},
+// 		{[]string{"a.{a,b}.test*.b"}, "(test LIKE 'a.%' AND match(test, '^a[.](a|b)[.]test([^.]*?)[.]b$'))"},
+// 		{[]string{"a.[b].te{s}t.b"}, "test='a.b.test.b'"},
+// 		{[]string{"a.[ab].te{s,t}*.b"}, "(test LIKE 'a.%' AND match(test, '^a[.][ab][.]te(s|t)([^.]*?)[.]b$'))"},
+// 		{[]string{"a.[a].te{s}t.b", "b.[c].te{s}t.b"}, "test IN ('a.a.test.b','b.c.test.b')"},
+// 		{
+// 			[]string{"a.[b].te{s}t.b", "b.[c].te{s}t.b", "a.{a,b}.te{s,t}*.b", "a.{d,e}.te{s,t}*.b"},
+// 			"(test LIKE 'a.%' AND match(test, '^a[.][ab][.]te(s|t)([^.]*?)[.]b$')) OR " +
+// 				"(test LIKE 'a.%' AND match(test, '^a[.](d|e)[.]te(s|t)([^.]*?)[.]b$')) OR " +
+// 				"test IN ('a.a.test.b','b.c.test.b')",
+// 		},
+// 	}
+// 	for n, tt := range tests {
+// 		t.Run(fmt.Sprintf("[%d] %s", n, strings.Join(tt.queries, " ")), func(t *testing.T) {
+// 			if got := Globs(field, tt.queries); got != tt.want {
+// 				t.Errorf("Globs() =\n%v\nwant\n%v", got, tt.want)
+// 			}
+// 		})
+// 	}
+// }
+
+func BenchmarkGlob(b *testing.B) {
+	field := "test"
+	tests := []string{
+		"a.[a].te{s}.b",
+		"a.{a,b}.te{s,t}*.b",
+	}
+	for _, query := range tests {
+		b.Run(query, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = Glob(field, query, -1, 0)
+			}
+		})
+	}
+}
+
+// func BenchmarkGlobs(b *testing.B) {
+// 	field := "test"
+// 	tests := [][]string{
+// 		{"a.[a].te{s}.b", "b.[c].te{s}.b"},
+// 		{"a.{a,b}.te{s,t}*.b", "b.{e,d}.TE{S,T}*.b"},
+// 	}
+// 	for _, queries := range tests {
+// 		b.Run(strings.Join(queries, " "), func(b *testing.B) {
+// 			for i := 0; i < b.N; i++ {
+// 				_ = Globs(field, queries)
+// 			}
+// 		})
+// 	}
+// }
