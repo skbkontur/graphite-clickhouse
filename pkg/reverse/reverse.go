@@ -5,12 +5,7 @@ import (
 	"strings"
 )
 
-func String(path string) string {
-	// don't reverse tagged path
-	if strings.IndexByte(path, '?') >= 0 {
-		return path
-	}
-
+func StringNoTag(path string) string {
 	a := strings.Split(path, ".")
 
 	l := len(a)
@@ -19,6 +14,15 @@ func String(path string) string {
 	}
 
 	return strings.Join(a, ".")
+}
+
+func String(path string) string {
+	// don't reverse tagged path
+	if strings.IndexByte(path, '?') >= 0 {
+		return path
+	}
+
+	return StringNoTag(path)
 }
 
 func reverse(m []byte) {
@@ -55,6 +59,10 @@ func Bytes(path []byte) []byte {
 	if bytes.IndexByte(path, '?') >= 0 {
 		return path
 	}
+	return BytesNoTag(path)
+}
+
+func BytesNoTag(path []byte) []byte {
 	r := make([]byte, len(path))
 	copy(r, path)
 	Inplace(r)

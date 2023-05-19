@@ -262,6 +262,7 @@ func TestParseSeriesByTagWithCosts(t *testing.T) {
 }
 
 func BenchmarkParseSeriesByTag(b *testing.B) {
+	cfg := config.New()
 	benchmarks := []string{
 		"seriesByTag('key=value')",
 		"seriesByTag('name=*', 'key=value')",
@@ -270,7 +271,24 @@ func BenchmarkParseSeriesByTag(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, _ = ParseSeriesByTag(bm, nil)
+				_, _ = ParseSeriesByTag(bm, cfg)
+			}
+		})
+	}
+}
+
+func BenchmarkTaggedTermList_Bytes(b *testing.B) {
+	cfg := config.New()
+	benchmarks := []string{
+		"seriesByTag('key=value')",
+		"seriesByTag('name=*', 'key=value')",
+		"seriesByTag('name=value', '')",
+	}
+	for _, bm := range benchmarks {
+		terms, _ := ParseSeriesByTag(bm, cfg)
+		b.Run(bm, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = terms.Bytes()
 			}
 		})
 	}

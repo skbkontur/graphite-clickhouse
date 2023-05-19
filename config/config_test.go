@@ -357,7 +357,8 @@ sample-thereafter = 12
 		FindLimiter:          limiter.NoopLimiter{},
 		TagsLimiter:          limiter.NoopLimiter{},
 		IndexTable:           "graphite_index",
-		IndexReverse:         "direct",
+		IndexReverseStr:      "direct",
+		IndexReverse:         IndexDirect,
 		IndexReverses:        make(IndexReverses, 2),
 		IndexTimeout:         4000000000,
 		TaggedTable:          "graphite_tags",
@@ -375,9 +376,9 @@ sample-thereafter = 12
 		MaxDataPoints:        8000,
 		InternalAggregation:  true,
 	}
-	expected.ClickHouse.IndexReverses[0] = &IndexReverseRule{"suf", "pref", "", nil, "direct"}
+	expected.ClickHouse.IndexReverses[0] = &IndexReverseRule{"suf", "pref", "", nil, "direct", IndexDirect}
 	r, _ = regexp.Compile("^reg$")
-	expected.ClickHouse.IndexReverses[1] = &IndexReverseRule{"", "", "^reg$", r, "reversed"}
+	expected.ClickHouse.IndexReverses[1] = &IndexReverseRule{"", "", "^reg$", r, "reversed", IndexReversed}
 	assert.Equal(t, expected.ClickHouse, config.ClickHouse)
 
 	// Tags
@@ -639,7 +640,8 @@ sample-thereafter = 12
 			},
 		},
 		IndexTable:           "graphite_index",
-		IndexReverse:         "direct",
+		IndexReverseStr:      "direct",
+		IndexReverse:         IndexDirect,
 		IndexReverses:        make(IndexReverses, 2),
 		IndexTimeout:         4000000000,
 		TaggedTable:          "graphite_tags",
@@ -657,9 +659,9 @@ sample-thereafter = 12
 		MaxDataPoints:        8000,
 		InternalAggregation:  true,
 	}
-	expected.ClickHouse.IndexReverses[0] = &IndexReverseRule{"suf", "pref", "", nil, "direct"}
+	expected.ClickHouse.IndexReverses[0] = &IndexReverseRule{"suf", "pref", "", nil, "direct", IndexDirect}
 	r, _ = regexp.Compile("^reg$")
-	expected.ClickHouse.IndexReverses[1] = &IndexReverseRule{"", "", "^reg$", r, "reversed"}
+	expected.ClickHouse.IndexReverses[1] = &IndexReverseRule{"", "", "^reg$", r, "reversed", IndexReversed}
 	for i := range config.ClickHouse.QueryParams {
 		if _, ok := config.ClickHouse.QueryParams[i].Limiter.(*limiter.WLimiter); ok && config.ClickHouse.QueryParams[i].MaxQueries > 0 && config.ClickHouse.QueryParams[i].ConcurrentQueries > 0 {
 			config.ClickHouse.QueryParams[i].Limiter = nil
@@ -954,7 +956,8 @@ sample-thereafter = 12
 			},
 		},
 		IndexTable:           "graphite_index",
-		IndexReverse:         "direct",
+		IndexReverseStr:      "direct",
+		IndexReverse:         IndexDirect,
 		IndexReverses:        make(IndexReverses, 2),
 		IndexTimeout:         4000000000,
 		TaggedTable:          "graphite_tags",
@@ -972,9 +975,9 @@ sample-thereafter = 12
 		MaxDataPoints:        8000,
 		InternalAggregation:  true,
 	}
-	expected.ClickHouse.IndexReverses[0] = &IndexReverseRule{"suf", "pref", "", nil, "direct"}
+	expected.ClickHouse.IndexReverses[0] = &IndexReverseRule{"suf", "pref", "", nil, "direct", IndexDirect}
 	r, _ = regexp.Compile("^reg$")
-	expected.ClickHouse.IndexReverses[1] = &IndexReverseRule{"", "", "^reg$", r, "reversed"}
+	expected.ClickHouse.IndexReverses[1] = &IndexReverseRule{"", "", "^reg$", r, "reversed", IndexReversed}
 	for i := range config.ClickHouse.QueryParams {
 		if _, ok := config.ClickHouse.QueryParams[i].Limiter.(*limiter.ALimiter); ok {
 			config.ClickHouse.QueryParams[i].Limiter = nil

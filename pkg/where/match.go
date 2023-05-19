@@ -1,8 +1,11 @@
 package where
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/lomik/graphite-clickhouse/config"
+	"github.com/lomik/graphite-clickhouse/pkg/reverse"
+	"github.com/msaf1980/go-matcher/expand"
 )
 
 var (
@@ -85,33 +88,14 @@ func clearGlob(query string) string {
 	return query
 }
 
-func glob(field string, query string, optionalDotAtEnd bool) string {
-	if query == "*" {
-		return ""
-	}
-
-	query = clearGlob(query)
-
-	if !HasWildcard(query) {
-		if optionalDotAtEnd {
-			return In(field, []string{query, query + "."})
-		} else {
-			return Eq(field, query)
-		}
-	}
-
-	w := New()
-
+func globMatchBuild(buf *strings.Builder, field string, query string, optionalDotAtEnd bool) {
 	// before any wildcard symbol
 	simplePrefix := query[:strings.IndexAny(query, "[]{}*?")]
 
-	if len(simplePrefix) > 0 {
-		w.And(HasPrefix(field, simplePrefix))
-	}
-
 	// prefix search like "metric.name.xx*"
 	if len(simplePrefix) == len(query)-1 && query[len(query)-1] == '*' {
-		return HasPrefix(field, simplePrefix)
+		HasPrefixBuild(buf, field, simplePrefix)
+		return
 	}
 
 	// Q() replaces \ with \\, so using \. does not work here.
@@ -122,24 +106,143 @@ func glob(field string, query string, optionalDotAtEnd bool) string {
 	}
 
 	if simplePrefix == "" {
-		return fmt.Sprintf("match(%s, %s)", field, quote(`^`+GlobToRegexp(query)+postfix))
+		// return fmt.Sprintf("match(%s, %s)", field, quote(`^`+GlobToRegexp(query)+postfix))
+		buf.WriteString("match(")
+		buf.WriteString(field)
+		buf.WriteString(", '^")
+		buf.WriteString(GlobToRegexp(query))
+		buf.WriteString(postfix)
+		buf.WriteString("')")
+		return
 	}
 
-	return fmt.Sprintf("%s AND match(%s, %s)",
-		HasPrefix(field, simplePrefix),
-		field, quote(`^`+GlobToRegexp(query)+postfix),
+	// return fmt.Sprintf("%s AND match(%s, %s)",
+	//
+	//	HasPrefix(field, simplePrefix),
+	//	field, quote(`^`+GlobToRegexp(query)+postfix),
+	//
+	// )
+	HasPrefixBuild(buf, field, simplePrefix)
+	buf.WriteString(" AND match(")
+	buf.WriteString(field)
+	buf.WriteString(", '^")
+	buf.WriteString(GlobToRegexp(query))
+	buf.WriteString(postfix)
+	buf.WriteString("')")
+}
+
+func glob(field string, query string, optionalDotAtEnd bool, expandMax, expandDepth int,
+	reversed config.IndexDirection, reverses config.IndexReverses) (string, bool) {
+
+	var r bool
+	if query == "*" {
+		return "", r
+	}
+
+	if expandMax == 0 {
+		query = clearGlob(query)
+	} else {
+		queries, err := expand.Expand(query, expandMax, expandDepth)
+		if err != nil {
+			query = clearGlob(query)
+		} else if len(queries) == 1 {
+			query = queries[0]
+		} else {
+			if useReverse(queries[0], reversed, reverses) {
+				query = reverse.StringNoTag(query)
+				queries_r, err := expand.Expand(query, expandMax, expandDepth)
+				if err == nil {
+					r = true
+					queries = queries_r
+				}
+			}
+			return globs(field, queries, optionalDotAtEnd, expandMax, expandDepth), r
+		}
+	}
+
+	if !HasWildcard(query) {
+		if optionalDotAtEnd {
+			return In(field, []string{query, query + "."}), r
+		} else {
+			return Eq(field, query), r
+		}
+	}
+	var buf strings.Builder
+	buf.Grow(len(query) * 2)
+
+	if useReverse(query, reversed, reverses) {
+		query = reverse.StringNoTag(query)
+		r = true
+	}
+
+	globMatchBuild(&buf, field, query, optionalDotAtEnd)
+
+	return buf.String(), r
+}
+
+func globs(field string, queries []string, optionalDotAtEnd bool, expandMax, expandDepth int) string {
+	var (
+		buf strings.Builder
+		in  []string
 	)
+
+	for n, query := range queries {
+		// TODO (msaf1980): cleanup after expand queires complete
+		query = clearGlob(query)
+		if HasWildcard(query) {
+			if buf.Len() == 0 {
+				buf.WriteString("(")
+			} else {
+				buf.WriteString(" OR (")
+			}
+			globMatchBuild(&buf, field, query, optionalDotAtEnd)
+			buf.WriteString(")")
+		} else {
+			if optionalDotAtEnd {
+				if in == nil {
+					in = make([]string, 0, 2*(len(query)-n))
+				}
+				in = append(in, query)
+				in = append(in, query+".")
+			} else {
+				if in == nil {
+					in = make([]string, 0, len(query)-n)
+				}
+				in = append(in, query)
+			}
+		}
+	}
+	if len(in) > 0 {
+		if buf.Len() > 0 {
+			buf.WriteString(" OR ")
+		}
+		InBuild(&buf, field, in)
+	}
+
+	return buf.String()
 }
 
 // Glob ...
-func Glob(field string, query string) string {
-	return glob(field, query, false)
+func Glob(field string, query string, expandMax, expandDepth int,
+	reverse config.IndexDirection, reverses config.IndexReverses) (string, bool) {
+	return glob(field, query, false, expandMax, expandDepth, reverse, reverses)
 }
 
+// // Globs ...
+// func Globs(field string, queries []string) string {
+// 	return globs(field, queries, false)
+// }
+
 // TreeGlob ...
-func TreeGlob(field string, query string) string {
-	return glob(field, query, true)
+func TreeGlob(field string, query string, expandMax, expandDepth int,
+	reverse config.IndexDirection, reverses config.IndexReverses) (string, bool) {
+	return glob(field, query, true, expandMax, expandDepth, reverse, reverses)
 }
+
+// // TreeGlobs ...
+// func TreeGlobs(field string, queries []string) string {
+// 	return globs(field, queries, true)
+// }
 
 func ConcatMatchKV(key, value string) string {
 	startLine := value[0] == '^'
@@ -165,11 +268,13 @@ func Match(field string, key, value string) string {
 	}
 
 	if simplePrefix == "" {
-		return fmt.Sprintf("match(%s, %s)", field, quoteRegex(key, value))
+		// return fmt.Sprintf("match(%s, %s)", field, quoteRegex(key, value))
+		return "match(" + field + ", " + quoteRegex(key, value) + ")"
 	}
 
-	return fmt.Sprintf("%s AND match(%s, %s)",
-		HasPrefix(field, simplePrefix),
-		field, quoteRegex(key, value),
-	)
+	// return fmt.Sprintf("%s AND match(%s, %s)",
+	// 	HasPrefix(field, simplePrefix),
+	// 	field, quoteRegex(key, value),
+	// )
+	return HasPrefix(field, simplePrefix) + " AND match(" + field + ", " + quoteRegex(key, value) + ")"
 }

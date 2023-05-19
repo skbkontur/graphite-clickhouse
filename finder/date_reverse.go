@@ -7,6 +7,7 @@ import (
 	"github.com/lomik/graphite-clickhouse/config"
 	"github.com/lomik/graphite-clickhouse/helper/clickhouse"
 	"github.com/lomik/graphite-clickhouse/helper/date"
+	"github.com/lomik/graphite-clickhouse/pkg/reverse"
 	"github.com/lomik/graphite-clickhouse/pkg/scope"
 	"github.com/lomik/graphite-clickhouse/pkg/where"
 )
@@ -27,7 +28,7 @@ func NewDateFinderV3(url string, table string, opts clickhouse.Options) Finder {
 }
 
 func (f *DateFinderV3) whereFilter(query string, from int64, until int64) (*where.Where, *where.Where) {
-	w := f.where(ReverseString(query))
+	w := f.where(reverse.StringNoTag(query))
 
 	dateWhere := where.New()
 	dateWhere.Andf(
@@ -58,7 +59,7 @@ func (f *DateFinderV3) Execute(ctx context.Context, config *config.Config, query
 func (f *DateFinderV3) List() [][]byte {
 	list := f.BaseFinder.List()
 	for i := 0; i < len(list); i++ {
-		list[i] = ReverseBytes(list[i])
+		list[i] = reverse.BytesNoTag(list[i])
 	}
 
 	return list
@@ -67,7 +68,7 @@ func (f *DateFinderV3) List() [][]byte {
 func (f *DateFinderV3) Series() [][]byte {
 	list := f.BaseFinder.Series()
 	for i := 0; i < len(list); i++ {
-		list[i] = ReverseBytes(list[i])
+		list[i] = reverse.BytesNoTag(list[i])
 	}
 
 	return list

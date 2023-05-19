@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/lomik/graphite-clickhouse/config"
@@ -13,7 +12,9 @@ import (
 	"github.com/lomik/graphite-clickhouse/pkg/where"
 )
 
-var ErrNotImplemented = errors.New("not implemented")
+var (
+	ErrNotImplemented = errors.New("not implemented")
+)
 
 type BaseFinder struct {
 	url   string             // clickhouse dsn
@@ -35,17 +36,37 @@ func (b *BaseFinder) where(query string) *where.Where {
 
 	w := where.New()
 	w.And(where.Eq("Level", level))
-	w.And(where.TreeGlob("Path", query))
+
+	q, _ := where.TreeGlob("Path", query, config.ExpandMax, config.ExpandDepth, config.IndexDirect, nil)
+	w.And(q)
+
 	return w
 }
 
-func (b *BaseFinder) Execute(ctx context.Context, config *config.Config, query string, from int64, until int64, stat *FinderStat) (err error) {
-	w := b.where(query)
+func (b *BaseFinder) Execute(ctx context.Context, cfg *config.Config, query string, from int64, until int64, stat *FinderStat) (err error) {
+	var (
+		q  string
+		ok bool
+	)
+	if config.BaseFinderQueryCache == nil {
+		w := b.where(query)
+		q = w.String()
+	} else {
+		q, ok = config.BaseFinderQueryCache.Get(query)
+		if !ok {
+			w := b.where(query)
+			q = w.String()
+			config.BaseFinderQueryCache.Set(query, q, 1, config.ExpandTTL)
+		}
+	}
+
+	// TODO: consider consistent query generator
+	q = "SELECT Path FROM " + b.table + " WHERE " + q + " GROUP BY Path FORMAT TabSeparatedRaw"
+
 	b.body, stat.ChReadRows, stat.ChReadBytes, err = clickhouse.Query(
 		scope.WithTable(ctx, b.table),
 		b.url,
-		// TODO: consider consistent query generator
-		fmt.Sprintf("SELECT Path FROM %s WHERE %s GROUP BY Path FORMAT TabSeparatedRaw", b.table, w),
+		q,
 		b.opts,
 		nil,
 	)

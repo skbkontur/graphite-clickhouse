@@ -15,6 +15,7 @@ require (
 	github.com/lomik/og-rek v0.0.0-20170411191824-628eefeb8d80
 	github.com/lomik/zapwriter v0.0.0-20210624082824-c1161d1eb463
 	github.com/msaf1980/go-expirecache v0.0.2
+	github.com/msaf1980/go-matcher v0.0.0-20230518080202-185acf01dcd4
 	github.com/msaf1980/go-metrics v0.0.14
 	github.com/msaf1980/go-stringutils v0.1.4
 	github.com/msaf1980/go-syncutils v0.0.3

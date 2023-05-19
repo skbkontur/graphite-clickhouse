@@ -23,7 +23,7 @@ var (
 	ErrCostlySeriesByTag = errs.NewErrorWithCode("seriesByTag argument is too costly", http.StatusForbidden)
 )
 
-type TaggedTermOp int
+type TaggedTermOp uint8
 
 const (
 	TaggedTermEq       TaggedTermOp = 1
@@ -31,6 +31,13 @@ const (
 	TaggedTermNe       TaggedTermOp = 3
 	TaggedTermNotMatch TaggedTermOp = 4
 )
+
+var taggedTermOpMap = map[TaggedTermOp]string{
+	TaggedTermEq:       "=",
+	TaggedTermMatch:    "=~",
+	TaggedTermNe:       "!=",
+	TaggedTermNotMatch: "!=~",
+}
 
 type TaggedTerm struct {
 	Key         string
@@ -44,7 +51,31 @@ type TaggedTerm struct {
 	// values with wildcards or regex matching also has lower priority, set if needed it cost to < 0
 }
 
+func (t TaggedTerm) Write(buf *bytes.Buffer) {
+	buf.WriteString(t.Key)
+	buf.WriteString(taggedTermOpMap[t.Op])
+	buf.WriteString(t.Value)
+}
+
 type TaggedTermList []TaggedTerm
+
+func (s TaggedTermList) Bytes() []byte {
+	var buf bytes.Buffer
+	buf.Grow(128)
+	buf.WriteString("seriesByTag(")
+	for n, t := range s {
+		if n == 0 {
+			buf.WriteByte('\'')
+		} else {
+			buf.WriteString(", '")
+		}
+		t.Write(&buf)
+		buf.WriteByte('\'')
+	}
+	buf.WriteString(")")
+
+	return buf.Bytes()
+}
 
 func (s TaggedTermList) Len() int {
 	return len(s)
@@ -214,7 +245,7 @@ func setCost(term *TaggedTerm, costs *config.Costs) {
 	}
 }
 
-func ParseTaggedConditions(conditions []string, config *config.Config, autocomplete bool) ([]TaggedTerm, error) {
+func ParseTaggedConditions(conditions []string, config *config.Config, autocomplete bool) (TaggedTermList, error) {
 	nonWildcards := 0
 	terms := make([]TaggedTerm, len(conditions))
 
@@ -374,7 +405,7 @@ func seriesByTagArgs(query string) ([]string, error) {
 	return args, nil
 }
 
-func ParseSeriesByTag(query string, config *config.Config) ([]TaggedTerm, error) {
+func ParseSeriesByTag(query string, config *config.Config) (TaggedTermList, error) {
 	conditions, err := seriesByTagArgs(query)
 	if err != nil {
 		return nil, err
@@ -416,15 +447,6 @@ func NewCachedTags(body []byte) *TaggedFinder {
 	}
 }
 
-func (t *TaggedFinder) Execute(ctx context.Context, config *config.Config, query string, from int64, until int64, stat *FinderStat) error {
-	terms, err := ParseSeriesByTag(query, config)
-	if err != nil {
-		return err
-	}
-
-	return t.ExecutePrepared(ctx, terms, from, until, stat)
-}
-
 func (t *TaggedFinder) whereFilter(terms []TaggedTerm, from int64, until int64) (*where.Where, *where.Where, error) {
 	w, pw, err := TaggedWhere(terms)
 	if err != nil {
@@ -441,13 +463,67 @@ func (t *TaggedFinder) whereFilter(terms []TaggedTerm, from int64, until int64) 
 	return w, pw, nil
 }
 
-func (t *TaggedFinder) ExecutePrepared(ctx context.Context, terms []TaggedTerm, from int64, until int64, stat *FinderStat) error {
-	w, pw, err := t.whereFilter(terms, from, until)
+func (t *TaggedFinder) Execute(ctx context.Context, cfg *config.Config, query string, from int64, until int64, stat *FinderStat) error {
+	terms, err := ParseSeriesByTag(query, cfg)
 	if err != nil {
 		return err
 	}
+	var (
+		q  string
+		ok bool
+	)
+
+	if config.TaggedQueryCache == nil {
+		w, pw, err := t.whereFilter(terms, from, until)
+		if err != nil {
+			return err
+		}
+		q = pw.PreWhereSQL() + " " + w.SQL()
+	} else {
+		q, ok = config.TaggedQueryCache.Get(query)
+		if !ok {
+			w, pw, err := t.whereFilter(terms, from, until)
+			if err != nil {
+				return err
+			}
+			q = pw.PreWhereSQL() + " " + w.SQL()
+			config.TaggedQueryCache.Set(query, q, 1, config.ExpandTTL)
+		}
+	}
+
+	return t.exec(ctx, q, stat)
+}
+
+func (t *TaggedFinder) ExecutePrepared(ctx context.Context, terms TaggedTermList, from int64, until int64, stat *FinderStat) error {
+	var (
+		q  string
+		ok bool
+	)
+	if config.TaggedQueryCache == nil {
+		w, pw, err := t.whereFilter(terms, from, until)
+		if err != nil {
+			return err
+		}
+		q = pw.PreWhereSQL() + " " + w.SQL()
+	} else {
+		query := terms.Bytes()
+		q, ok = config.TaggedQueryCache.Get(stringutils.UnsafeString(query))
+		if !ok {
+			w, pw, err := t.whereFilter(terms, from, until)
+			if err != nil {
+				return err
+			}
+			q = pw.PreWhereSQL() + " " + w.SQL()
+			config.TaggedQueryCache.Set(string(query), q, 1, config.ExpandTTL)
+		}
+	}
+
+	return t.exec(ctx, q, stat)
+}
+
+func (t *TaggedFinder) exec(ctx context.Context, q string, stat *FinderStat) (err error) {
 	// TODO: consider consistent query generator
-	sql := fmt.Sprintf("SELECT Path FROM %s %s %s GROUP BY Path FORMAT TabSeparatedRaw", t.table, pw.PreWhereSQL(), w.SQL())
+	sql := "SELECT Path FROM " + t.table + " " + q + " GROUP BY Path FORMAT TabSeparatedRaw"
 	t.body, stat.ChReadRows, stat.ChReadBytes, err = clickhouse.Query(scope.WithTable(ctx, t.table), t.url, sql, t.opts, nil)
 	stat.Table = t.table
 	stat.ReadBytes = int64(len(t.body))

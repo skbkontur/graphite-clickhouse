@@ -208,6 +208,10 @@ github.com/modern-go/reflect2
 # github.com/msaf1980/go-expirecache v0.0.2
 ## explicit; go 1.18
 github.com/msaf1980/go-expirecache
+# github.com/msaf1980/go-matcher v0.0.0-20230518080202-185acf01dcd4
+## explicit; go 1.18
+github.com/msaf1980/go-matcher/expand
+github.com/msaf1980/go-matcher/pkg/utils
 # github.com/msaf1980/go-metrics v0.0.14
 ## explicit; go 1.16
 github.com/msaf1980/go-metrics
@@ -218,7 +222,6 @@ github.com/msaf1980/go-stringutils
 # github.com/msaf1980/go-syncutils v0.0.3
 ## explicit; go 1.18
 github.com/msaf1980/go-syncutils/atomic
-github.com/msaf1980/go-syncutils/lock
 # github.com/msaf1980/go-timeutils v0.0.3
 ## explicit; go 1.19
 github.com/msaf1980/go-timeutils/duration

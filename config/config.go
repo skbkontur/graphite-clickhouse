@@ -98,11 +98,12 @@ type Common struct {
 
 // IndexReverseRule contains rules to use direct or reversed request to index table
 type IndexReverseRule struct {
-	Suffix   string         `toml:"suffix,omitempty" json:"suffix" comment:"rule is used when the target suffix is matched"`
-	Prefix   string         `toml:"prefix,omitempty" json:"prefix" comment:"rule is used when the target prefix is matched"`
-	RegexStr string         `toml:"regex,omitempty" json:"regex" comment:"rule is used when the target regex is matched"`
-	Regex    *regexp.Regexp `toml:"-" json:"-"`
-	Reverse  string         `toml:"reverse" json:"reverse" comment:"same as index-reverse"`
+	Suffix     string         `toml:"suffix,omitempty" json:"suffix" comment:"rule is used when the target suffix is matched"`
+	Prefix     string         `toml:"prefix,omitempty" json:"prefix" comment:"rule is used when the target prefix is matched"`
+	RegexStr   string         `toml:"regex,omitempty" json:"regex" comment:"rule is used when the target regex is matched"`
+	Regex      *regexp.Regexp `toml:"-" json:"-"`
+	ReverseStr string         `toml:"reverse" json:"reverse" comment:"same as index-reverse"`
+	Reverse    IndexDirection `toml:"-" json:"-"`
 }
 
 type Costs struct {
@@ -113,21 +114,39 @@ type Costs struct {
 // IndexReverses is a slise of ptrs to IndexReverseRule
 type IndexReverses []*IndexReverseRule
 
+type IndexDirection uint8
+
 const (
-	IndexAuto     = iota
-	IndexDirect   = iota
-	IndexReversed = iota
+	IndexAuto = iota
+	IndexDirect
+	IndexReversed
 )
 
 // IndexReverse maps setting name to value
-var IndexReverse = map[string]uint8{
-	"direct":   IndexDirect,
+var indexDirectionStrMap = map[string]IndexDirection{
 	"auto":     IndexAuto,
+	"direct":   IndexDirect,
 	"reversed": IndexReversed,
 }
 
-// IndexReverseNames contains valid names for index-reverse setting
-var IndexReverseNames = []string{"auto", "direct", "reversed"}
+// IndexReverse maps setting name to value
+var indexDirectionMap = map[IndexDirection]string{
+	IndexAuto:     "auto",
+	IndexDirect:   "direct",
+	IndexReversed: "reversed",
+}
+
+func (d *IndexDirection) Set(value string) error {
+	var ok bool
+	if *d, ok = indexDirectionStrMap[value]; !ok {
+		return fmt.Errorf("invalid index direction %s", value)
+	}
+	return nil
+}
+
+func (d *IndexDirection) String() string {
+	return indexDirectionMap[*d]
+}
 
 type UserLimits struct {
 	MaxQueries        int `toml:"max-queries" json:"max-queries" comment:"Max queries to fetch data"`
@@ -195,7 +214,12 @@ type ClickHouse struct {
 	DateFormat              string                `toml:"date-format" json:"date-format" comment:"Date format (default, utc, both)"`
 	IndexTable              string                `toml:"index-table" json:"index-table" comment:"see doc/index-table.md"`
 	IndexUseDaily           bool                  `toml:"index-use-daily" json:"index-use-daily"`
-	IndexReverse            string                `toml:"index-reverse" json:"index-reverse" comment:"see doc/config.md"`
+	IndexQueryCache         uint64                `toml:"index-query-cache" json:"index-query-cache" comment:"see doc/config.md"`
+	IndexQueryCacheTTL      int32                 `toml:"index-query-cache-ttl" json:"index-query-cache-ttl" comment:"see doc/config.md"`
+	IndexExpandMax          int                   `toml:"index-expand-max" json:"index-expand-max" comment:"see doc/config.md"`
+	IndexExpandDepth        int                   `toml:"index-expand-depth" json:"index-expand-depth" comment:"see doc/config.md"`
+	IndexReverseStr         string                `toml:"index-reverse" json:"index-reverse" comment:"see doc/config.md"`
+	IndexReverse            IndexDirection        `toml:"-" json:"-"`
 	IndexReverses           IndexReverses         `toml:"index-reverses" json:"index-reverses" comment:"see doc/config.md" commented:"true"`
 	IndexTimeout            time.Duration         `toml:"index-timeout" json:"index-timeout" comment:"total timeout to fetch series list from index"`
 	TaggedTable             string                `toml:"tagged-table" json:"tagged-table" comment:"'tagged' table from carbon-clickhouse, required for seriesByTag"`
@@ -342,7 +366,8 @@ func New() *Config {
 			IndexTable:           "graphite_index",
 			IndexUseDaily:        true,
 			TaggedUseDaily:       true,
-			IndexReverse:         "auto",
+			IndexReverseStr:      "auto",
+			IndexReverse:         IndexAuto,
 			IndexReverses:        IndexReverses{},
 			IndexTimeout:         time.Minute,
 			TaggedTable:          "graphite_tagged",
@@ -392,11 +417,12 @@ func (ir IndexReverses) Compile() error {
 		} else if len(n.Prefix) == 0 && len(n.Suffix) == 0 {
 			return fmt.Errorf("empthy index-use-reverses[%d] rule", i)
 		}
-		if _, ok := IndexReverse[n.Reverse]; !ok {
-			return fmt.Errorf("%s is not valid value for index-reverses.reverse", n.Reverse)
+		if err := n.Reverse.Set(n.ReverseStr); err != nil {
+			return fmt.Errorf("%s is not valid value for index-reverses.reverse", n.ReverseStr)
 		}
 
 	}
+
 	return nil
 }
 
@@ -430,9 +456,9 @@ func DefaultConfig() (*Config, error) {
 
 	if len(cfg.ClickHouse.IndexReverses) == 0 {
 		cfg.ClickHouse.IndexReverses = IndexReverses{
-			&IndexReverseRule{Suffix: "suffix", Reverse: "auto"},
-			&IndexReverseRule{Prefix: "prefix", Reverse: "direct"},
-			&IndexReverseRule{RegexStr: "regex", Reverse: "reversed"},
+			&IndexReverseRule{Suffix: "suffix", ReverseStr: "auto"},
+			&IndexReverseRule{Prefix: "prefix", ReverseStr: "direct", Reverse: IndexDirect},
+			&IndexReverseRule{RegexStr: "regex", ReverseStr: "reversed", Reverse: IndexReversed},
 		}
 		err := cfg.ClickHouse.IndexReverses.Compile()
 		if err != nil {
@@ -485,7 +511,7 @@ func Unmarshal(body []byte, noLog bool) (*Config, error) {
 	cfg := New()
 	if len(body) != 0 {
 		// TODO: remove in v0.14
-		if bytes.Index(body, []byte("\n[logging]\n")) != -1 || bytes.Index(body, []byte("[logging]")) == 0 {
+		if bytes.Contains(body, []byte("\n[logging]\n")) || bytes.Index(body, []byte("[logging]")) == 0 {
 			deprecations["logging"] = fmt.Errorf("single [logging] value became multivalue [[logging]]; please, adjust your config")
 			body = bytes.ReplaceAll(body, []byte("\n[logging]\n"), []byte("\n[[logging]]\n"))
 			if bytes.Index(body, []byte("[logging]")) == 0 {
@@ -563,8 +589,8 @@ func Unmarshal(body []byte, noLog bool) (*Config, error) {
 		}
 	}
 
-	if _, ok := IndexReverse[cfg.ClickHouse.IndexReverse]; !ok {
-		return nil, fmt.Errorf("%s is not valid value for index-reverse", cfg.ClickHouse.IndexReverse)
+	if err := cfg.ClickHouse.IndexReverse.Set(cfg.ClickHouse.IndexReverseStr); err != nil {
+		return nil, fmt.Errorf("%s is not valid value for index-reverse", cfg.ClickHouse.IndexReverseStr)
 	}
 
 	err = cfg.ClickHouse.IndexReverses.Compile()
@@ -683,6 +709,8 @@ func Unmarshal(body []byte, noLog bool) (*Config, error) {
 		)
 		cfg.ClickHouse.UserLimits[u] = q
 	}
+
+	SetQueryCache(cfg.ClickHouse.IndexQueryCache, cfg.ClickHouse.IndexQueryCacheTTL, cfg.ClickHouse.IndexExpandMax, cfg.ClickHouse.IndexExpandDepth)
 
 	return cfg, nil
 }

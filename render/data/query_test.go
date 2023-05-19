@@ -427,13 +427,13 @@ func TestGenerateQuery(t *testing.T) {
 				" arrayFilter((v,m)->m!=0, avgResample(1668124800, 1668325322, 1)(Value, Time), mask) AS values\n" +
 				"FROM graphite.table\n" +
 				"PREWHERE Date >= '" + date.FromTimestampToDaysFormat(1668124800) + "' AND Date <= '" + date.UntilTimestampToDaysFormat(1668325322) + "'\n" +
-				"WHERE (Path in metrics_list) AND (Time >= 1668124800 AND Time <= 1668325322)\n" +
+				"WHERE (Path IN metrics_list) AND (Time >= 1668124800 AND Time <= 1668325322)\n" +
 				"GROUP BY Path\n" +
 				"FORMAT RowBinary"),
 			unaggregated: ("SELECT Path, groupArray(Time), groupArray(Value), groupArray(Timestamp)\n" +
 				"FROM graphite.table\n" +
 				"PREWHERE Date >= '" + date.FromTimestampToDaysFormat(1668124800) + "' AND Date <= '" + date.UntilTimestampToDaysFormat(1668325322) + "'\n" +
-				"WHERE (Path in metrics_list) AND (Time >= 1668124800 AND Time <= 1668325322)\n" +
+				"WHERE (Path IN metrics_list) AND (Time >= 1668124800 AND Time <= 1668325322)\n" +
 				"GROUP BY Path\n" +
 				"FORMAT RowBinary"),
 		},
@@ -444,13 +444,13 @@ func TestGenerateQuery(t *testing.T) {
 				" arrayFilter((v,m)->m!=0, minResample(11111, 33333, 11111)(Value, Time), mask) AS values\n" +
 				"FROM graphite.table\n" +
 				"PREWHERE Date >= '" + date.FromTimestampToDaysFormat(11111) + "' AND Date <= '" + date.FromTimestampToDaysFormat(33333) + "'\n" +
-				"WHERE (Path in metrics_list) AND (Time >= 11111 AND Time <= 33333)\n" +
+				"WHERE (Path IN metrics_list) AND (Time >= 11111 AND Time <= 33333)\n" +
 				"GROUP BY Path\n" +
 				"FORMAT RowBinary"),
 			unaggregated: ("SELECT Path, groupArray(Time), groupArray(Value), groupArray(Timestamp)\n" +
 				"FROM graphite.table\n" +
 				"PREWHERE Date >= '" + date.FromTimestampToDaysFormat(11111) + "' AND Date <= '" + date.UntilTimestampToDaysFormat(33333) + "'\n" +
-				"WHERE (Path in metrics_list) AND (Time >= 11111 AND Time <= 33333)\n" +
+				"WHERE (Path IN metrics_list) AND (Time >= 11111 AND Time <= 33333)\n" +
 				"GROUP BY Path\n" +
 				"FORMAT RowBinary"),
 		},

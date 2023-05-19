@@ -30,3 +30,18 @@ func TestReverse(t *testing.T) {
 		assert.Equal(expected, string(b))
 	}
 }
+
+// func BenchmarkGlob(b *testing.B) {
+// 	field := "test"
+// 	tests := []string{
+// 		"a.[a].te{s}.b",
+// 		"a.{a,b}.te{s,t}*.b",
+// 	}
+// 	for _, query := range tests {
+// 		b.Run(query, func(b *testing.B) {
+// 			for i := 0; i < b.N; i++ {
+// 				_ = Glob(field, query, -1, 0, config.IndexDirect, nil)
+// 			}
+// 		})
+// 	}
+// }

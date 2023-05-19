@@ -54,6 +54,11 @@ Useless settings:
 - `max_ast_elements`: the same
 - `max_execution_time`: with `cancel_http_readonly_queries_on_client_close=1` and `data-timeout = "1m"` it's already covered.
 
+### Query cache setting
+
+- `index-query-cache`: query cache max size
+- `index-query-cache-ttl`: query cache ttl (default 7200)
+
 ### Query multi parameters (for overwrite default url and data-timeout)
 
 For queries with duration (until - from) >= 72 hours, use custom url and data-timeout
@@ -109,6 +114,12 @@ user-limits = {
 
 ### Index table
 See [index table](./index-table.md) documentation for details.
+
+
+### Index query globs expand setting
+
+- `index-expand-max`: globs max expanded limit (by default 0 (no expand))
+- `index-expand-depth`: globs max depth expanded nodes limit (by default 0 (no limit))
 
 ### Index reversed queries tuning
 By default the daemon decides to make a direct or reversed request to the [index table](./index-table.md) based on a first and last glob node in the metric. It choose the most long path to reduce readings. Additional examples can be found in [tests](../finder/index_test.go).
@@ -279,6 +290,14 @@ Only one tag used as filter for index field Tag1, see graphite_tagged table [str
  # see doc/index-table.md
  index-table = "graphite_index"
  index-use-daily = true
+ # see doc/config.md
+ index-query-cache = 0
+ # see doc/config.md
+ index-query-cache-ttl = 0
+ # see doc/config.md
+ index-expand-max = 0
+ # see doc/config.md
+ index-expand-depth = 0
  # see doc/config.md
  index-reverse = "auto"
 
