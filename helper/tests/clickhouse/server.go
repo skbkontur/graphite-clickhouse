@@ -16,13 +16,13 @@ type TestResponse struct {
 
 type TestHandler struct {
 	sync.RWMutex
-	responceMap map[string]*TestResponse
+	ResponceMap map[string]*TestResponse
 	queries     uint64
 }
 
 type TestServer struct {
 	*httptest.Server
-	handler *TestHandler
+	Handler *TestHandler
 }
 
 func (h *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +31,7 @@ func (h *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := string(body)
 
 	h.RLock()
-	resp, ok := h.responceMap[req]
+	resp, ok := h.ResponceMap[req]
 	h.RUnlock()
 
 	atomic.AddUint64(&h.queries, 1)
@@ -51,19 +51,19 @@ func (h *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewTestServer() *TestServer {
-	h := &TestHandler{responceMap: make(map[string]*TestResponse)}
+	h := &TestHandler{ResponceMap: make(map[string]*TestResponse)}
 
 	srv := httptest.NewServer(h)
 
-	return &TestServer{Server: srv, handler: h}
+	return &TestServer{Server: srv, Handler: h}
 }
 
 func (s *TestServer) AddResponce(request string, response *TestResponse) {
-	s.handler.Lock()
-	s.handler.responceMap[request] = response
-	s.handler.Unlock()
+	s.Handler.Lock()
+	s.Handler.ResponceMap[request] = response
+	s.Handler.Unlock()
 }
 
 func (s *TestServer) Queries() uint64 {
-	return s.handler.queries
+	return s.Handler.queries
 }

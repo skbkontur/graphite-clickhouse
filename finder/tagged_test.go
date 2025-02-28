@@ -601,9 +601,6 @@ func BenchmarkParseSeriesByTag(b *testing.B) {
 func TestParseSeriesByTagWithCostsFromCountTable(t *testing.T) {
 	assert := assert.New(t)
 
-	srv := chtest.NewTestServer()
-	defer srv.Close()
-
 	var from, until int64
 	// 2022-11-11 00:01:00 +05:00 && 2022-11-11 00:01:10 +05:00
 	from, until = 1668106860, 1668106870
@@ -615,6 +612,8 @@ func TestParseSeriesByTagWithCostsFromCountTable(t *testing.T) {
 		metricMightExist bool,
 		expectedErr error,
 	) {
+		srv := chtest.NewTestServer()
+		defer srv.Close()
 
 		cfg, _ := config.DefaultConfig()
 		cfg.ClickHouse.URL = srv.URL
@@ -645,7 +644,8 @@ func TestParseSeriesByTagWithCostsFromCountTable(t *testing.T) {
 			assert.Equal(err, expectedErr, testName+", err")
 			return
 		}
-		assert.NoError(err)
+		err = fmt.Errorf("debugging")
+		assert.NoError(err, srv.Handler.ResponceMap)
 		assert.Equal(taggedFinder.metricMightExists, metricMightExist, testName+", metricMightExist")
 
 		length := len(expected)
