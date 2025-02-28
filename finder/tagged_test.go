@@ -644,8 +644,7 @@ func TestParseSeriesByTagWithCostsFromCountTable(t *testing.T) {
 			assert.Equal(err, expectedErr, testName+", err")
 			return
 		}
-		err = fmt.Errorf("debugging")
-		assert.NoError(err, srv.Handler.ResponceMap)
+		assert.NoError(err, srv.Handler.ResponceMap, srv.Handler.ResponceMap[sql])
 		assert.Equal(taggedFinder.metricMightExists, metricMightExist, testName+", metricMightExist")
 
 		length := len(expected)
